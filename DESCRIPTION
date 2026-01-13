@@ -1,0 +1,25 @@
+Package: blockr.extra
+Title: Extra Experimental Blocks for blockr
+Version: 0.0.1
+Authors@R:
+    c(person(given = "Christoph",
+             family = "Sax",
+             role = c("aut", "cre"),
+             email = "christoph@cynkra.com"))
+Description: Provides experimental function blocks for blockr. Includes blocks
+    for wrapping custom R functions with auto-generated UI based on function arguments.
+License: GPL (>= 3)
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Imports:
+    blockr.core,
+    shiny,
+    shinyAce,
+    shinyjs,
+    DT,
+    gt
+Suggests:
+    dplyr,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
