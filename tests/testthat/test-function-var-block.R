@@ -61,6 +61,31 @@ test_that("function_var_block produces correct result with default function", {
   )
 })
 
+test_that("function_var_block result is not NULL", {
+  block <- new_function_var_block()
+
+  testServer(
+    blockr.core::get_s3_method("block_server", block),
+    {
+      session$flushReact()
+
+      result <- session$returned$result()
+      expect_false(is.null(result))
+      expect_true(is.data.frame(result))
+      expect_true(nrow(result) > 0)
+    },
+    args = list(
+      x = block,
+      data = list(
+        ...args = shiny::reactiveValues(
+          `1` = df1,
+          `2` = df2
+        )
+      )
+    )
+  )
+})
+
 test_that("function_var_block works with three inputs", {
   block <- new_function_var_block()
 

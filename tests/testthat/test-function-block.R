@@ -38,6 +38,26 @@ test_that("function_block produces correct result with default function", {
   )
 })
 
+test_that("function_block result is not NULL", {
+  block <- new_function_block()
+
+  testServer(
+    blockr.core::get_s3_method("block_server", block),
+    {
+      session$flushReact()
+
+      result <- session$returned$result()
+      expect_false(is.null(result))
+      expect_true(is.data.frame(result))
+      expect_true(nrow(result) > 0)
+    },
+    args = list(
+      x = block,
+      data = list(data = function() datasets::iris)
+    )
+  )
+})
+
 test_that("function_block produces correct result with custom function", {
   my_fn <- function(data, n = 3L) {
     utils::head(data, n)

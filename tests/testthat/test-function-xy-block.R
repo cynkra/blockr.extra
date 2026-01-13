@@ -50,6 +50,26 @@ test_that("function_xy_block produces correct result with default function", {
   )
 })
 
+test_that("function_xy_block result is not NULL", {
+  block <- new_function_xy_block()
+
+  testServer(
+    blockr.core::get_s3_method("block_server", block),
+    {
+      session$flushReact()
+
+      result <- session$returned$result()
+      expect_false(is.null(result))
+      expect_true(is.data.frame(result))
+      expect_true(nrow(result) > 0)
+    },
+    args = list(
+      x = block,
+      data = list(x = function() df1, y = function() df2)
+    )
+  )
+})
+
 test_that("function_xy_block produces correct result with merge function", {
   my_fn <- function(x, y) {
     merge(x, y, by = "id")
