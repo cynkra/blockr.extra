@@ -466,3 +466,109 @@ test_that("function_block combined parameter values are reflected in result", {
     args = list(x = block2, data = list(data = function() datasets::iris))
   )
 })
+
+# Tests for serialization/deserialization round-trip
+
+test_that("function_block serializes and deserializes correctly", {
+  fn_text <- "function(data, n = 5L) { utils::head(data, n) }"
+  block <- new_function_block(fn = fn_text)
+
+  # Serialize block with its state
+  serialized <- blockr.core::blockr_ser(block, state = list(fn = fn_text))
+
+  # Deserialize
+  restored <- blockr.core::blockr_deser(serialized)
+
+  expect_s3_class(restored, "function_block")
+
+  # Verify the restored block works correctly
+  testServer(
+    blockr.core::get_s3_method("block_server", restored),
+    {
+      session$flushReact()
+
+      result <- session$returned$result()
+      expect_equal(nrow(result), 5L)
+      expect_equal(result, utils::head(datasets::iris, 5L))
+    },
+    args = list(
+      x = restored,
+      data = list(data = function() datasets::iris)
+    )
+  )
+})
+
+test_that("function_block with select parameter serializes correctly", {
+  fn_text <- "function(data, species = c('setosa', 'versicolor', 'virginica')) {
+    dplyr::filter(data, Species == species)
+  }"
+  block <- new_function_block(fn = fn_text)
+
+  # Serialize and deserialize
+  serialized <- blockr.core::blockr_ser(block, state = list(fn = fn_text))
+  restored <- blockr.core::blockr_deser(serialized)
+
+  expect_s3_class(restored, "function_block")
+
+  testServer(
+    blockr.core::get_s3_method("block_server", restored),
+    {
+      session$flushReact()
+
+      result <- session$returned$result()
+      expect_true(is.data.frame(result))
+      expect_true(nrow(result) > 0)
+    },
+    args = list(
+      x = restored,
+      data = list(data = function() datasets::iris)
+    )
+  )
+})
+
+# Tests using the new text-based API (no deprecation warnings)
+
+test_that("function_block works with text-based fn parameter", {
+  block <- new_function_block(
+    fn = "function(data, n = 3L) { utils::head(data, n) }"
+  )
+
+  expect_s3_class(block, "function_block")
+
+  testServer(
+    blockr.core::get_s3_method("block_server", block),
+    {
+      session$flushReact()
+
+      result <- session$returned$result()
+      expect_equal(nrow(result), 3L)
+    },
+    args = list(
+      x = block,
+      data = list(data = function() datasets::iris)
+    )
+  )
+})
+
+test_that("function_block text API with multiple parameters works", {
+  block <- new_function_block(
+    fn = "function(data, n = 5L, keep_cols = TRUE) {
+      result <- utils::head(data, n)
+      if (keep_cols) result else result[, 1:2]
+    }"
+  )
+
+  testServer(
+    blockr.core::get_s3_method("block_server", block),
+    {
+      session$flushReact()
+
+      result <- session$returned$result()
+      expect_equal(nrow(result), 5L)
+    },
+    args = list(
+      x = block,
+      data = list(data = function() datasets::iris)
+    )
+  )
+})

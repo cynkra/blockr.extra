@@ -33,21 +33,21 @@ board <- new_dock_board(
 
     # Function block with custom head function
     head_fn = new_function_block(
-      fn = function(data, n = 10L) {
+      fn = "function(data, n = 10L) {
         utils::head(data, n)
-      }
+      }"
     ),
 
     # Function block that filters and summarizes
     summary_fn = new_function_block(
-      fn = function(data, species = c("setosa", "versicolor", "virginica")) {
+      fn = "function(data, species = c('setosa', 'versicolor', 'virginica')) {
         dplyr::filter(data, Species == species) |>
           dplyr::summarize(
             n = dplyr::n(),
             mean_sepal_length = mean(Sepal.Length),
             mean_petal_length = mean(Petal.Length)
           )
-      }
+      }"
     )
   ),
   links = c(

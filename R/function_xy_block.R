@@ -18,17 +18,19 @@
 #' - If the function returns a `gt_tbl` object, it renders as a GT table
 #' - Otherwise, it renders as an interactive DataTable
 #'
-#' @param fn An R function that transforms two data frames. Must have `x` as
-#'   first argument and `y` as second argument. Default values of other
-#'   arguments determine the UI widgets.
+#' @param fn Character string containing R function code that transforms two
+#'   data frames. The function must have `x` as first argument and `y` as second
+#'   argument. Default values of other arguments determine the UI widgets.
+#'   Legacy: passing a function object is deprecated but still supported.
 #' @param ... Additional arguments passed to new_block
 #'
 #' @examples
 #' # Define a simple merge function
-#' merge_data <- function(x, y, by = "id", all = FALSE) {
-#'   merge(x, y, by = by, all = all)
-#' }
-#' blk <- new_function_xy_block(fn = merge_data)
+#' blk <- new_function_xy_block(
+#'   fn = "function(x, y, by = 'id', all = FALSE) {
+#'     merge(x, y, by = by, all = all)
+#'   }"
+#' )
 #'
 #' if (interactive()) {
 #'   library(blockr.core)
@@ -39,9 +41,9 @@
 #'         data1 = new_dataset_block(dataset = "band_members", package = "dplyr"),
 #'         data2 = new_dataset_block(dataset = "band_instruments", package = "dplyr"),
 #'         merged = new_function_xy_block(
-#'           fn = function(x, y) {
-#'             dplyr::left_join(x, y, by = "name")
-#'           }
+#'           fn = "function(x, y) {
+#'             dplyr::left_join(x, y, by = 'name')
+#'           }"
 #'         )
 #'       ),
 #'       links = links(
@@ -56,11 +58,39 @@
 #' @importFrom blockr.core block_output block_ui
 #' @export
 new_function_xy_block <- function(
-    fn = function(x, y) { dplyr::bind_rows(x, y) },
+    fn = "function(x, y) { dplyr::bind_rows(x, y) }",
     ...) {
 
-# Store function as text for serialization and display
-fn_text <- paste(deparse(fn), collapse = "\n")
+  # Legacy fallback: if fn is a function, convert to text with warning
+  if (is.function(fn)) {
+    warning(
+      "Passing a function object to new_function_xy_block() is deprecated. ",
+      "Pass a character string instead.",
+      call. = FALSE
+    )
+    fn <- paste(deparse(fn), collapse = "\n")
+  }
+
+  # fn should now be character
+  fn_text <- fn
+
+  # Parse text to function
+  fn <- tryCatch(
+    eval(parse(text = fn_text)),
+    error = function(e) {
+      stop("Failed to parse function: ", conditionMessage(e), call. = FALSE)
+    }
+  )
+
+  if (!is.function(fn)) {
+    stop("fn must evaluate to a function", call. = FALSE)
+  }
+
+  # Validate first two arguments are 'x' and 'y'
+  args <- names(formals(fn))
+  if (length(args) < 2 || args[1] != "x" || args[2] != "y") {
+    stop("Function must have 'x' as first argument and 'y' as second argument", call. = FALSE)
+  }
 
 blockr.core::new_block(
   server = function(id, x, y) {

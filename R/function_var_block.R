@@ -18,25 +18,22 @@
 #' - If the function returns a `gt_tbl` object, it renders as a GT table
 #' - Otherwise, it renders as an interactive DataTable
 #'
-#' @param fn An R function that transforms multiple data frames. Must have `...`
-#'   as first argument. Default values of other arguments determine the UI widgets.
+#' @param fn Character string containing R function code that transforms multiple
+#'   data frames. The function must have `...` as first argument. Default values
+#'   of other arguments determine the UI widgets. Legacy: passing a function
+#'   object is deprecated but still supported.
 #' @param ... Additional arguments passed to new_block
 #'
 #' @examples
 #' # Define a simple bind function
-#' bind_all <- function(..., .id = NULL) {
-#'   dplyr::bind_rows(..., .id = .id)
-#' }
-#' blk <- new_function_var_block(fn = bind_all)
+#' blk <- new_function_var_block(
+#'   fn = "function(..., .id = NULL) {
+#'     dplyr::bind_rows(..., .id = .id)
+#'   }"
+#' )
 #'
 #' if (interactive()) {
 #'   library(blockr.core)
-#'
-#'   # Custom reduce function
-#'   reduce_merge <- function(..., by = "id") {
-#'     dfs <- list(...)
-#'     Reduce(function(x, y) merge(x, y, by = by, all = TRUE), dfs)
-#'   }
 #'
 #'   serve(
 #'     new_board(
@@ -44,7 +41,12 @@
 #'         data1 = new_dataset_block(dataset = "band_members", package = "dplyr"),
 #'         data2 = new_dataset_block(dataset = "band_instruments", package = "dplyr"),
 #'         data3 = new_dataset_block(dataset = "band_instruments2", package = "dplyr"),
-#'         merged = new_function_var_block(fn = reduce_merge)
+#'         merged = new_function_var_block(
+#'           fn = "function(..., by = 'id') {
+#'             dfs <- list(...)
+#'             Reduce(function(x, y) merge(x, y, by = by, all = TRUE), dfs)
+#'           }"
+#'         )
 #'       ),
 #'       links = links(
 #'         from = c("data1", "data2", "data3"),
@@ -58,11 +60,39 @@
 #' @importFrom blockr.core block_output block_ui
 #' @export
 new_function_var_block <- function(
-    fn = function(...) { dplyr::bind_rows(...) },
+    fn = "function(...) { dplyr::bind_rows(...) }",
     ...) {
 
-# Store function as text for serialization and display
-fn_text <- paste(deparse(fn), collapse = "\n")
+  # Legacy fallback: if fn is a function, convert to text with warning
+  if (is.function(fn)) {
+    warning(
+      "Passing a function object to new_function_var_block() is deprecated. ",
+      "Pass a character string instead.",
+      call. = FALSE
+    )
+    fn <- paste(deparse(fn), collapse = "\n")
+  }
+
+  # fn should now be character
+  fn_text <- fn
+
+  # Parse text to function
+  fn <- tryCatch(
+    eval(parse(text = fn_text)),
+    error = function(e) {
+      stop("Failed to parse function: ", conditionMessage(e), call. = FALSE)
+    }
+  )
+
+  if (!is.function(fn)) {
+    stop("fn must evaluate to a function", call. = FALSE)
+  }
+
+  # Validate first argument is '...'
+  args <- names(formals(fn))
+  if (length(args) == 0 || args[1] != "...") {
+    stop("Function must have '...' as its first argument", call. = FALSE)
+  }
 
 # Helper function to extract argument names for variadic blocks
 dot_args_names <- function(x) {

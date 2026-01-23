@@ -16,31 +16,64 @@
 #' - If the function returns a `gt_tbl` object, it renders as a GT table
 #' - Otherwise, it renders as an interactive DataTable
 #'
-#' @param fn An R function that transforms a data frame. Must have `data` as
-#'   first argument. Default values of other arguments determine the UI widgets.
+#' @param fn Character string containing R function code that transforms a data
+#'   frame. The function must have `data` as first argument. Default values of
+#'   other arguments determine the UI widgets. Legacy: passing a function object
+#'   is deprecated but still supported.
 #' @param ... Additional arguments passed to new_block
 #'
 #' @examples
 #' # Define a simple filter function (renders as DataTable)
-#' filter_species <- function(data, species = c("setosa", "versicolor", "virginica")) {
-#'   dplyr::filter(data, Species == species)
-#' }
-#' blk <- new_function_block(fn = filter_species)
+#' blk <- new_function_block(
+#'   fn = "function(data, species = c('setosa', 'versicolor', 'virginica')) {
+#'     dplyr::filter(data, Species == species)
+#'   }"
+#' )
 #'
 #' # Function returning GT object (auto-detected, renders as GT)
-#' make_gt <- function(data, title = "My Table") {
-#'   gt::gt(data) |> gt::tab_header(title = title)
-#' }
-#' blk_gt <- new_function_block(fn = make_gt)
+#' blk_gt <- new_function_block(
+#'   fn = "function(data, title = 'My Table') {
+#'     gt::gt(data) |> gt::tab_header(title = title)
+#'   }"
+#' )
 #'
 #' @importFrom blockr.core block_output block_ui
 #' @export
 new_function_block <- function(
-    fn = function(data, n = 6L) { utils::head(data, n) },
+    fn = "function(data, n = 6L) { utils::head(data, n) }",
     ...) {
 
-# Store function as text for serialization and display
-fn_text <- paste(deparse(fn), collapse = "\n")
+  # Legacy fallback: if fn is a function, convert to text with warning
+  if (is.function(fn)) {
+    warning(
+      "Passing a function object to new_function_block() is deprecated. ",
+      "Pass a character string instead.",
+      call. = FALSE
+    )
+    fn <- paste(deparse(fn), collapse = "\n")
+  }
+
+  # fn should now be character
+
+  fn_text <- fn
+
+  # Parse text to function
+  fn <- tryCatch(
+    eval(parse(text = fn_text)),
+    error = function(e) {
+      stop("Failed to parse function: ", conditionMessage(e), call. = FALSE)
+    }
+  )
+
+  if (!is.function(fn)) {
+    stop("fn must evaluate to a function", call. = FALSE)
+  }
+
+  # Validate first argument is 'data'
+  args <- names(formals(fn))
+  if (length(args) == 0 || args[1] != "data") {
+    stop("Function must have 'data' as its first argument", call. = FALSE)
+  }
 
 blockr.core::new_block(
   server = function(id, data) {
