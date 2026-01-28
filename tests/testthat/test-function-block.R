@@ -10,11 +10,9 @@ test_that("new_function_block creates a valid block", {
 })
 
 test_that("new_function_block accepts custom functions", {
-  my_fn <- function(data, n = 10L) {
-    utils::head(data, n)
-  }
-
-  block <- new_function_block(fn = my_fn)
+  block <- new_function_block(
+    fn = "function(data, n = 10L) { utils::head(data, n) }"
+  )
 
   expect_s3_class(block, "function_block")
 })
@@ -59,11 +57,9 @@ test_that("function_block result is not NULL", {
 })
 
 test_that("function_block produces correct result with custom function", {
-  my_fn <- function(data, n = 3L) {
-    utils::head(data, n)
-  }
-
-  block <- new_function_block(fn = my_fn)
+  block <- new_function_block(
+    fn = "function(data, n = 3L) { utils::head(data, n) }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block),
@@ -82,12 +78,9 @@ test_that("function_block produces correct result with custom function", {
 })
 
 test_that("function_block auto-detects GT output", {
-  # Function that returns a gt object
-  gt_fn <- function(data) {
-    gt::gt(utils::head(data, 3))
-  }
-
-  block <- new_function_block(fn = gt_fn)
+  block <- new_function_block(
+    fn = "function(data) { gt::gt(utils::head(data, 3)) }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block),
@@ -105,11 +98,11 @@ test_that("function_block auto-detects GT output", {
 })
 
 test_that("function_block with filter function produces correct result", {
-  filter_fn <- function(data, species = c("setosa", "versicolor", "virginica")) {
-    dplyr::filter(data, Species == species)
-  }
-
-  block <- new_function_block(fn = filter_fn)
+  block <- new_function_block(
+    fn = "function(data, species = c('setosa', 'versicolor', 'virginica')) {
+      dplyr::filter(data, Species == species)
+    }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block),
@@ -133,16 +126,12 @@ test_that("function_block with filter function produces correct result", {
 })
 
 test_that("function_block with multiple parameters works", {
-  multi_fn <- function(
-    data,
-    n = 10L,
-    species = c("setosa", "versicolor", "virginica")
-  ) {
-    result <- dplyr::filter(data, Species == species)
-    utils::head(result, n)
-  }
-
-  block <- new_function_block(fn = multi_fn)
+  block <- new_function_block(
+    fn = "function(data, n = 10L, species = c('setosa', 'versicolor', 'virginica')) {
+      result <- dplyr::filter(data, Species == species)
+      utils::head(result, n)
+    }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block),
@@ -164,18 +153,10 @@ test_that("function_block with multiple parameters works", {
 
 test_that("function_block can be reconstructed from function text", {
   # This tests the serialization/restoration pattern
-  original_fn <- function(data, n = 5L) {
-    utils::head(data, n)
-  }
+  fn_text <- "function(data, n = 5L) { utils::head(data, n) }"
 
-  # Create block and get the function as text (how it would be serialized)
-  fn_text <- paste(deparse(original_fn), collapse = "\n")
-
-  # Reconstruct function from text (how it would be restored)
-  restored_fn <- eval(parse(text = fn_text))
-
-  # Create new block from restored function
-  restored_block <- new_function_block(fn = restored_fn)
+  # Create block from text (how it would be restored)
+  restored_block <- new_function_block(fn = fn_text)
 
   # Verify the restored block works correctly
   testServer(
@@ -195,11 +176,9 @@ test_that("function_block can be reconstructed from function text", {
 })
 
 test_that("function_block handles function with no extra parameters", {
-  simple_fn <- function(data) {
-    utils::head(data, 10)
-  }
-
-  block <- new_function_block(fn = simple_fn)
+  block <- new_function_block(
+    fn = "function(data) { utils::head(data, 10) }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block),
@@ -217,18 +196,12 @@ test_that("function_block handles function with no extra parameters", {
 })
 
 test_that("function_block handles different parameter types", {
-  # Test numeric, logical, and character parameters
-  typed_fn <- function(
-    data,
-    n = 5L,                    # numeric
-    keep_all = TRUE,           # logical
-    label = "filtered"         # character
-  ) {
-    result <- utils::head(data, n)
-    if (keep_all) result else result[1:2, ]
-  }
-
-  block <- new_function_block(fn = typed_fn)
+  block <- new_function_block(
+    fn = "function(data, n = 5L, keep_all = TRUE, label = 'filtered') {
+      result <- utils::head(data, n)
+      if (keep_all) result else result[1:2, ]
+    }"
+  )
 
   # Just verify the block can be created and produces output
   testServer(
@@ -252,8 +225,7 @@ test_that("function_block handles different parameter types", {
 
 test_that("function_block numeric parameter values are reflected in result", {
   # Test with n = 3
-  fn_3 <- function(data, n = 3L) { utils::head(data, n) }
-  block_3 <- new_function_block(fn = fn_3)
+  block_3 <- new_function_block(fn = "function(data, n = 3L) { utils::head(data, n) }")
 
   testServer(
     blockr.core::get_s3_method("block_server", block_3),
@@ -266,8 +238,7 @@ test_that("function_block numeric parameter values are reflected in result", {
   )
 
   # Test with n = 10
-  fn_10 <- function(data, n = 10L) { utils::head(data, n) }
-  block_10 <- new_function_block(fn = fn_10)
+  block_10 <- new_function_block(fn = "function(data, n = 10L) { utils::head(data, n) }")
 
   testServer(
     blockr.core::get_s3_method("block_server", block_10),
@@ -280,8 +251,7 @@ test_that("function_block numeric parameter values are reflected in result", {
   )
 
   # Test with n = 1
-  fn_1 <- function(data, n = 1L) { utils::head(data, n) }
-  block_1 <- new_function_block(fn = fn_1)
+  block_1 <- new_function_block(fn = "function(data, n = 1L) { utils::head(data, n) }")
 
   testServer(
     blockr.core::get_s3_method("block_server", block_1),
@@ -296,10 +266,9 @@ test_that("function_block numeric parameter values are reflected in result", {
 
 test_that("function_block logical parameter values are reflected in result", {
   # Test with keep_all = TRUE
-  fn_true <- function(data, keep_all = TRUE) {
-    if (keep_all) data else utils::head(data, 5)
-  }
-  block_true <- new_function_block(fn = fn_true)
+  block_true <- new_function_block(
+    fn = "function(data, keep_all = TRUE) { if (keep_all) data else utils::head(data, 5) }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block_true),
@@ -312,10 +281,9 @@ test_that("function_block logical parameter values are reflected in result", {
   )
 
   # Test with keep_all = FALSE
-  fn_false <- function(data, keep_all = FALSE) {
-    if (keep_all) data else utils::head(data, 5)
-  }
-  block_false <- new_function_block(fn = fn_false)
+  block_false <- new_function_block(
+    fn = "function(data, keep_all = FALSE) { if (keep_all) data else utils::head(data, 5) }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block_false),
@@ -330,11 +298,12 @@ test_that("function_block logical parameter values are reflected in result", {
 
 test_that("function_block character parameter values are reflected in result", {
   # Test with prefix = "row"
-  fn_row <- function(data, prefix = "row") {
-    data$label <- paste0(prefix, "_", seq_len(nrow(data)))
-    utils::head(data, 3)
-  }
-  block_row <- new_function_block(fn = fn_row)
+  block_row <- new_function_block(
+    fn = "function(data, prefix = 'row') {
+      data$label <- paste0(prefix, '_', seq_len(nrow(data)))
+      utils::head(data, 3)
+    }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block_row),
@@ -347,11 +316,12 @@ test_that("function_block character parameter values are reflected in result", {
   )
 
   # Test with prefix = "item"
-  fn_item <- function(data, prefix = "item") {
-    data$label <- paste0(prefix, "_", seq_len(nrow(data)))
-    utils::head(data, 3)
-  }
-  block_item <- new_function_block(fn = fn_item)
+  block_item <- new_function_block(
+    fn = "function(data, prefix = 'item') {
+      data$label <- paste0(prefix, '_', seq_len(nrow(data)))
+      utils::head(data, 3)
+    }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block_item),
@@ -366,10 +336,9 @@ test_that("function_block character parameter values are reflected in result", {
 
 test_that("function_block select parameter values are reflected in result", {
   # Test filtering to setosa
-  fn_setosa <- function(data, species = "setosa") {
-    dplyr::filter(data, Species == species)
-  }
-  block_setosa <- new_function_block(fn = fn_setosa)
+  block_setosa <- new_function_block(
+    fn = "function(data, species = 'setosa') { dplyr::filter(data, Species == species) }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block_setosa),
@@ -383,10 +352,9 @@ test_that("function_block select parameter values are reflected in result", {
   )
 
   # Test filtering to versicolor
-  fn_versicolor <- function(data, species = "versicolor") {
-    dplyr::filter(data, Species == species)
-  }
-  block_versicolor <- new_function_block(fn = fn_versicolor)
+  block_versicolor <- new_function_block(
+    fn = "function(data, species = 'versicolor') { dplyr::filter(data, Species == species) }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block_versicolor),
@@ -400,10 +368,9 @@ test_that("function_block select parameter values are reflected in result", {
   )
 
   # Test filtering to virginica
-  fn_virginica <- function(data, species = "virginica") {
-    dplyr::filter(data, Species == species)
-  }
-  block_virginica <- new_function_block(fn = fn_virginica)
+  block_virginica <- new_function_block(
+    fn = "function(data, species = 'virginica') { dplyr::filter(data, Species == species) }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block_virginica),
@@ -419,14 +386,15 @@ test_that("function_block select parameter values are reflected in result", {
 
 test_that("function_block combined parameter values are reflected in result", {
   # Test with n=5, species="setosa", descending=TRUE
-  fn_combined <- function(data, n = 5L, species = "setosa", descending = TRUE) {
-    result <- dplyr::filter(data, Species == species)
-    if (descending) {
-      result <- dplyr::arrange(result, dplyr::desc(Sepal.Length))
-    }
-    utils::head(result, n)
-  }
-  block <- new_function_block(fn = fn_combined)
+  block <- new_function_block(
+    fn = "function(data, n = 5L, species = 'setosa', descending = TRUE) {
+      result <- dplyr::filter(data, Species == species)
+      if (descending) {
+        result <- dplyr::arrange(result, dplyr::desc(Sepal.Length))
+      }
+      utils::head(result, n)
+    }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block),
@@ -442,16 +410,17 @@ test_that("function_block combined parameter values are reflected in result", {
   )
 
   # Test with different values: n=3, species="versicolor", descending=FALSE
-  fn_combined2 <- function(data, n = 3L, species = "versicolor", descending = FALSE) {
-    result <- dplyr::filter(data, Species == species)
-    if (descending) {
-      result <- dplyr::arrange(result, dplyr::desc(Sepal.Length))
-    } else {
-      result <- dplyr::arrange(result, Sepal.Length)
-    }
-    utils::head(result, n)
-  }
-  block2 <- new_function_block(fn = fn_combined2)
+  block2 <- new_function_block(
+    fn = "function(data, n = 3L, species = 'versicolor', descending = FALSE) {
+      result <- dplyr::filter(data, Species == species)
+      if (descending) {
+        result <- dplyr::arrange(result, dplyr::desc(Sepal.Length))
+      } else {
+        result <- dplyr::arrange(result, Sepal.Length)
+      }
+      utils::head(result, n)
+    }"
+  )
 
   testServer(
     blockr.core::get_s3_method("block_server", block2),

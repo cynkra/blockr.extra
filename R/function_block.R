@@ -18,8 +18,7 @@
 #'
 #' @param fn Character string containing R function code that transforms a data
 #'   frame. The function must have `data` as first argument. Default values of
-#'   other arguments determine the UI widgets. Legacy: passing a function object
-#'   is deprecated but still supported.
+#'   other arguments determine the UI widgets.
 #' @param ... Additional arguments passed to new_block
 #'
 #' @examples
@@ -42,18 +41,6 @@
 new_function_block <- function(
     fn = "function(data, n = 6L) { utils::head(data, n) }",
     ...) {
-
-  # Legacy fallback: if fn is a function, convert to text with warning
-  if (is.function(fn)) {
-    warning(
-      "Passing a function object to new_function_block() is deprecated. ",
-      "Pass a character string instead.",
-      call. = FALSE
-    )
-    fn <- paste(deparse(fn), collapse = "\n")
-  }
-
-  # fn should now be character
 
   fn_text <- fn
 

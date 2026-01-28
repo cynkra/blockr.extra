@@ -20,8 +20,7 @@
 #'
 #' @param fn Character string containing R function code that transforms multiple
 #'   data frames. The function must have `...` as first argument. Default values
-#'   of other arguments determine the UI widgets. Legacy: passing a function
-#'   object is deprecated but still supported.
+#'   of other arguments determine the UI widgets.
 #' @param ... Additional arguments passed to new_block
 #'
 #' @examples
@@ -63,17 +62,6 @@ new_function_var_block <- function(
     fn = "function(...) { dplyr::bind_rows(...) }",
     ...) {
 
-  # Legacy fallback: if fn is a function, convert to text with warning
-  if (is.function(fn)) {
-    warning(
-      "Passing a function object to new_function_var_block() is deprecated. ",
-      "Pass a character string instead.",
-      call. = FALSE
-    )
-    fn <- paste(deparse(fn), collapse = "\n")
-  }
-
-  # fn should now be character
   fn_text <- fn
 
   # Parse text to function
