@@ -20,9 +20,10 @@ run_app(
     ),
 
     # Diagnostic plot - named c() maps labels to values
+    # Note: as.integer() needed because Shiny returns selectInput values as character
     diagnostics = new_function_block(
       "function(data, diagnostic = c('Residuals vs Fitted' = 1, 'Normal Q-Q' = 2, 'Scale-Location' = 3, 'Cooks Distance' = 4, 'Residuals vs Leverage' = 5, 'Cooks vs Leverage' = 6)) {
-        plot(data, which = diagnostic)
+        plot(data, which = as.integer(diagnostic))
       }"
     ),
 
