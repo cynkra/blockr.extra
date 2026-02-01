@@ -19,11 +19,10 @@ run_app(
       }"
     ),
 
-    # Diagnostic plots (base R plot.lm)
+    # Diagnostic plot (base R plot.lm) - user can pick which one
     diagnostics = new_function_block(
-      "function(data) {
-        par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
-        plot(data, which = 1:4, ask = FALSE)
+      "function(data, which = c(1, 2, 3, 4, 5, 6)) {
+        plot(data, which = which)
       }"
     ),
 
