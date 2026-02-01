@@ -4,16 +4,12 @@
 \alias{new_function_block}
 \title{Function Transform Block}
 \usage{
-new_function_block(
-  fn = function(data, n = 6L) {
-     utils::head(data, n)
- },
-  ...
-)
+new_function_block(fn = "function(data, n = 6L) { utils::head(data, n) }", ...)
 }
 \arguments{
-\item{fn}{An R function that transforms a data frame. Must have \code{data} as
-first argument. Default values of other arguments determine the UI widgets.}
+\item{fn}{Character string containing R function code that transforms a data
+frame. The function must have \code{data} as first argument. Default values of
+other arguments determine the UI widgets.}
 
 \item{...}{Additional arguments passed to new_block}
 }
@@ -35,24 +31,29 @@ Additional arguments are introspected and UI is generated based on defaults:
 
 \section{Output Types}{
 
-Output type is auto-detected from the function's return value:
+Output type is auto-detected from the function's return value (in priority order):
 \itemize{
-\item If the function returns a \code{gt_tbl} object, it renders as a GT table
-\item Otherwise, it renders as an interactive DataTable
+\item \code{gt_tbl}: renders as GT HTML table
+\item \code{ggplot}: renders with plotOutput/renderPlot
+\item \code{recordedplot} (base R plot): renders with evaluate::replay() in renderPlot
+\item \code{data.frame}/\code{tibble}: renders as interactive DataTable
+\item Any other object: shows print() output as preformatted text
 }
 }
 
 \examples{
 # Define a simple filter function (renders as DataTable)
-filter_species <- function(data, species = c("setosa", "versicolor", "virginica")) {
-  dplyr::filter(data, Species == species)
-}
-blk <- new_function_block(fn = filter_species)
+blk <- new_function_block(
+  fn = "function(data, species = c('setosa', 'versicolor', 'virginica')) {
+    dplyr::filter(data, Species == species)
+  }"
+)
 
 # Function returning GT object (auto-detected, renders as GT)
-make_gt <- function(data, title = "My Table") {
-  gt::gt(data) |> gt::tab_header(title = title)
-}
-blk_gt <- new_function_block(fn = make_gt)
+blk_gt <- new_function_block(
+  fn = "function(data, title = 'My Table') {
+    gt::gt(data) |> gt::tab_header(title = title)
+  }"
+)
 
 }

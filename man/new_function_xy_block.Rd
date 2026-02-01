@@ -4,17 +4,12 @@
 \alias{new_function_xy_block}
 \title{Function XY Transform Block}
 \usage{
-new_function_xy_block(
-  fn = function(x, y) {
-     dplyr::bind_rows(x, y)
- },
-  ...
-)
+new_function_xy_block(fn = "function(x, y) { dplyr::bind_rows(x, y) }", ...)
 }
 \arguments{
-\item{fn}{An R function that transforms two data frames. Must have \code{x} as
-first argument and \code{y} as second argument. Default values of other
-arguments determine the UI widgets.}
+\item{fn}{Character string containing R function code that transforms two
+data frames. The function must have \code{x} as first argument and \code{y} as second
+argument. Default values of other arguments determine the UI widgets.}
 
 \item{...}{Additional arguments passed to new_block}
 }
@@ -38,19 +33,23 @@ and UI is generated based on defaults:
 
 \section{Output Types}{
 
-Output type is auto-detected from the function's return value:
+Output type is auto-detected from the function's return value (in priority order):
 \itemize{
-\item If the function returns a \code{gt_tbl} object, it renders as a GT table
-\item Otherwise, it renders as an interactive DataTable
+\item \code{gt_tbl}: renders as GT HTML table
+\item \code{ggplot}: renders with plotOutput/renderPlot
+\item \code{recordedplot} (base R plot): renders with evaluate::replay() in renderPlot
+\item \code{data.frame}/\code{tibble}: renders as interactive DataTable
+\item Any other object: shows print() output as preformatted text
 }
 }
 
 \examples{
 # Define a simple merge function
-merge_data <- function(x, y, by = "id", all = FALSE) {
-  merge(x, y, by = by, all = all)
-}
-blk <- new_function_xy_block(fn = merge_data)
+blk <- new_function_xy_block(
+  fn = "function(x, y, by = 'id', all = FALSE) {
+    merge(x, y, by = by, all = all)
+  }"
+)
 
 if (interactive()) {
   library(blockr.core)
@@ -61,9 +60,9 @@ if (interactive()) {
         data1 = new_dataset_block(dataset = "band_members", package = "dplyr"),
         data2 = new_dataset_block(dataset = "band_instruments", package = "dplyr"),
         merged = new_function_xy_block(
-          fn = function(x, y) {
-            dplyr::left_join(x, y, by = "name")
-          }
+          fn = "function(x, y) {
+            dplyr::left_join(x, y, by = 'name')
+          }"
         )
       ),
       links = links(

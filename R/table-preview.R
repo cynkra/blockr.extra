@@ -12,18 +12,18 @@
 #' @keywords internal
 html_table_result <- function(result, block, session) {
 
-  n_rows <- tryCatch(
+  page_size <- tryCatch(
     blockr.core::get_board_option_or_default(
-      "n_rows",
+      "page_size",
       blockr.core::board_options(block),
       session
     ),
-    error = function(e) 50L  # fallback default
+    error = function(e) 10L  # fallback default
   )
 
   shiny::renderUI({
     tryCatch({
-      dat <- as.data.frame(utils::head(result, n_rows))
+      dat <- as.data.frame(utils::head(result, page_size))
       total_rows <- if (is.null(result)) 0L else nrow(result)
       build_html_table(dat, total_rows)
     }, error = function(e) {

@@ -12,9 +12,12 @@
 #' - Single character value -> textInput
 #'
 #' @section Output Types:
-#' Output type is auto-detected from the function's return value:
-#' - If the function returns a `gt_tbl` object, it renders as a GT table
-#' - Otherwise, it renders as an interactive DataTable
+#' Output type is auto-detected from the function's return value (in priority order):
+#' - `gt_tbl`: renders as GT HTML table
+#' - `ggplot`: renders with plotOutput/renderPlot
+#' - `recordedplot` (base R plot): renders with evaluate::replay() in renderPlot
+#' - `data.frame`/`tibble`: renders as interactive DataTable
+#' - Any other object: shows print() output as preformatted text
 #'
 #' @param fn Character string containing R function code that transforms a data
 #'   frame. The function must have `data` as first argument. Default values of
@@ -36,7 +39,7 @@
 #'   }"
 #' )
 #'
-#' @importFrom blockr.core block_output block_ui
+#' @importFrom blockr.core block_eval block_output block_ui
 #' @export
 new_function_block <- function(
     fn = "function(data, n = 6L) { utils::head(data, n) }",
@@ -348,9 +351,10 @@ blockr.core::new_block(
 }
 
 
-# Auto-detect output type from result:
-# - gt_tbl objects render as GT
-# - Everything else renders as DataTable
+#' @export
+block_eval.function_block <- function(x, expr, env, ...) {
+  eval_with_plot_capture(expr, env)
+}
 
 #' @export
 block_ui.function_block <- function(id, x, ...) {
@@ -359,16 +363,7 @@ block_ui.function_block <- function(id, x, ...) {
 
 #' @export
 block_output.function_block <- function(x, result, session) {
-
-  shiny::renderUI({
-    if (inherits(result, "gt_tbl")) {
-      # Result is already a gt object
-      shiny::HTML(gt::as_raw_html(result))
-    } else {
-      # Default to DataTable for data.frames with board options
-      dt_datatable(result, x, session)
-    }
-  })
+  render_dynamic_output(result, x, session)
 }
 
 

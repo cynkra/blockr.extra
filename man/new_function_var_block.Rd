@@ -4,16 +4,12 @@
 \alias{new_function_var_block}
 \title{Function Variadic Transform Block}
 \usage{
-new_function_var_block(
-  fn = function(...) {
-     dplyr::bind_rows(...)
- },
-  ...
-)
+new_function_var_block(fn = "function(...) { dplyr::bind_rows(...) }", ...)
 }
 \arguments{
-\item{fn}{An R function that transforms multiple data frames. Must have \code{...}
-as first argument. Default values of other arguments determine the UI widgets.}
+\item{fn}{Character string containing R function code that transforms multiple
+data frames. The function must have \code{...} as first argument. Default values
+of other arguments determine the UI widgets.}
 
 \item{...}{Additional arguments passed to new_block}
 }
@@ -37,28 +33,26 @@ generated based on defaults:
 
 \section{Output Types}{
 
-Output type is auto-detected from the function's return value:
+Output type is auto-detected from the function's return value (in priority order):
 \itemize{
-\item If the function returns a \code{gt_tbl} object, it renders as a GT table
-\item Otherwise, it renders as an interactive DataTable
+\item \code{gt_tbl}: renders as GT HTML table
+\item \code{ggplot}: renders with plotOutput/renderPlot
+\item \code{recordedplot} (base R plot): renders with evaluate::replay() in renderPlot
+\item \code{data.frame}/\code{tibble}: renders as interactive DataTable
+\item Any other object: shows print() output as preformatted text
 }
 }
 
 \examples{
 # Define a simple bind function
-bind_all <- function(..., .id = NULL) {
-  dplyr::bind_rows(..., .id = .id)
-}
-blk <- new_function_var_block(fn = bind_all)
+blk <- new_function_var_block(
+  fn = "function(..., .id = NULL) {
+    dplyr::bind_rows(..., .id = .id)
+  }"
+)
 
 if (interactive()) {
   library(blockr.core)
-
-  # Custom reduce function
-  reduce_merge <- function(..., by = "id") {
-    dfs <- list(...)
-    Reduce(function(x, y) merge(x, y, by = by, all = TRUE), dfs)
-  }
 
   serve(
     new_board(
@@ -66,7 +60,12 @@ if (interactive()) {
         data1 = new_dataset_block(dataset = "band_members", package = "dplyr"),
         data2 = new_dataset_block(dataset = "band_instruments", package = "dplyr"),
         data3 = new_dataset_block(dataset = "band_instruments2", package = "dplyr"),
-        merged = new_function_var_block(fn = reduce_merge)
+        merged = new_function_var_block(
+          fn = "function(..., by = 'id') {
+            dfs <- list(...)
+            Reduce(function(x, y) merge(x, y, by = by, all = TRUE), dfs)
+          }"
+        )
       ),
       links = links(
         from = c("data1", "data2", "data3"),
