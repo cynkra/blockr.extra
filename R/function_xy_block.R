@@ -405,8 +405,18 @@ default_val <- tryCatch(
 
 shiny::div(
   class = "block-input-wrapper",
-  if (is.character(default_val) && length(default_val) > 1) {
-    # Multiple character values -> selectInput
+  if (is.list(default_val) && !is.data.frame(default_val)) {
+    # list() -> multi-select
+    choices <- unlist(default_val)
+    shiny::selectInput(
+      inputId = input_id,
+      label = label,
+      choices = choices,
+      selected = choices,
+      multiple = TRUE
+    )
+  } else if (is.character(default_val) && length(default_val) > 1) {
+    # Multiple character values -> single selectInput
     shiny::selectInput(
       inputId = input_id,
       label = label,

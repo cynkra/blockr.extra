@@ -11,10 +11,10 @@ run_app(
     # Data source
     data = new_dataset_block("mtcars"),
 
-    # Fit linear model
+    # Fit linear model (list() = multi-select for predictors)
     model = new_function_block(
-      "function(data, response = c('mpg', 'hp', 'wt'), predictor = c('wt', 'hp', 'disp', 'cyl')) {
-        formula <- as.formula(paste(response, '~', predictor))
+      "function(data, response = c('mpg', 'hp', 'wt'), predictors = list('wt', 'hp', 'disp', 'cyl')) {
+        formula <- as.formula(paste(response, '~', paste(predictors, collapse = ' + ')))
         lm(formula, data = data)
       }"
     ),
