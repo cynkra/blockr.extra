@@ -22,8 +22,8 @@ run_app(
     # Diagnostic plots (base R plot.lm)
     diagnostics = new_function_block(
       "function(data) {
-        par(mfrow = c(2, 2))
-        plot(data)
+        par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+        plot(data, which = 1:4, ask = FALSE)
       }"
     ),
 
