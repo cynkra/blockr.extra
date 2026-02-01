@@ -4,12 +4,27 @@
 \alias{build_html_table}
 \title{Build HTML Table}
 \usage{
-build_html_table(dat, total_rows)
+build_html_table(
+  dat,
+  total_rows,
+  sort_state = NULL,
+  ns = NULL,
+  page = 1L,
+  page_size = 5L
+)
 }
 \arguments{
-\item{dat}{Data frame to display (already subset to n_rows)}
+\item{dat}{Data frame to display (already subset)}
 
 \item{total_rows}{Total number of rows in original data}
+
+\item{sort_state}{List with col (column name) and dir ("asc", "desc", or "none")}
+
+\item{ns}{Shiny namespace function}
+
+\item{page}{Current page number (default 1)}
+
+\item{page_size}{Number of rows per page (default 5)}
 }
 \value{
 A shiny tagList containing the table HTML

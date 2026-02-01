@@ -1,3 +1,31 @@
+#' Apply Table Sort
+#'
+#' Sorts data using dplyr::arrange(). Works with both local data frames
+#' and remote database tables (dbplyr).
+#'
+#' @param data A data frame or tbl object
+#' @param sort_col Column name to sort by (NULL for no sorting)
+#' @param sort_dir Sort direction: "asc", "desc", or "na" (NA first, then asc)
+#'
+#' @return The sorted data
+#'
+#' @keywords internal
+apply_table_sort <- function(data, sort_col, sort_dir) {
+  if (is.null(sort_col) || is.null(sort_dir) || sort_dir == "none") {
+    return(data)
+  }
+  if (!sort_col %in% names(data)) {
+    return(data)
+  }
+  if (sort_dir == "desc") {
+    dplyr::arrange(data, dplyr::desc(.data[[sort_col]]))
+  } else if (sort_dir == "na") {
+    dplyr::arrange(data, !is.na(.data[[sort_col]]), .data[[sort_col]])
+  } else {
+    dplyr::arrange(data, .data[[sort_col]])
+  }
+}
+
 #' HTML Table Preview for Data Frames
 #'
 #' Replaces DT output with a lightweight HTML table for data blocks,
@@ -18,14 +46,91 @@ html_table_result <- function(result, block, session) {
       blockr.core::board_options(block),
       session
     ),
-    error = function(e) 10L  # fallback default
+    error = function(e) 5L
   )
+
+  ns <- session$ns
+  key <- paste0("blockr_table_state_", ns(""))
+
+
+  # Initialize state once per namespace
+  if (is.null(session$userData[[key]])) {
+    sort_state <- shiny::reactiveVal(list(col = NULL, dir = "none"))
+    page_state <- shiny::reactiveVal(1L)
+
+    session$userData[[key]] <- list(
+      sort_state = sort_state,
+      page_state = page_state,
+      total_rows = 0L
+    )
+
+    # Observer for sort input from header clicks
+    shiny::observeEvent(session$input$blockr_table_sort, {
+      sort_input <- session$input$blockr_table_sort
+      if (!is.null(sort_input)) {
+        sort_state(list(col = sort_input$col, dir = sort_input$dir))
+        page_state(1L)  # Reset page when sort changes
+      }
+    })
+
+    # Observer for page navigation
+    shiny::observeEvent(session$input$blockr_table_page, {
+      direction <- session$input$blockr_table_page
+      current <- page_state()
+      total_rows <- session$userData[[key]]$total_rows
+      max_page <- max(1L, ceiling(total_rows / page_size))
+
+      if (direction == "prev" && current > 1L) {
+        page_state(current - 1L)
+      } else if (direction == "next" && current < max_page) {
+        page_state(current + 1L)
+      }
+    })
+  }
+
+  sort_state <- session$userData[[key]]$sort_state
+  page_state <- session$userData[[key]]$page_state
 
   shiny::renderUI({
     tryCatch({
-      dat <- as.data.frame(utils::head(result, page_size))
+      current_sort <- sort_state()
+      page <- page_state()
+
+      # Update stored total_rows for observer to use
       total_rows <- if (is.null(result)) 0L else nrow(result)
-      build_html_table(dat, total_rows)
+      session$userData[[key]]$total_rows <- total_rows
+
+      # Clamp page if data changed
+      max_page <- max(1L, ceiling(total_rows / page_size))
+      if (page > max_page) {
+        page <- max_page
+        page_state(max_page)
+      }
+
+      # Apply sorting
+      sorted_result <- apply_table_sort(
+        result,
+        current_sort$col,
+        current_sort$dir
+      )
+
+      # Slice data for current page
+      start_row <- (page - 1L) * page_size + 1L
+      end_row <- min(page * page_size, total_rows)
+      dat <- if (total_rows > 0 && end_row >= start_row) {
+        as.data.frame(dplyr::slice(sorted_result, start_row:end_row))
+      } else {
+        as.data.frame(sorted_result)
+      }
+
+      build_html_table(
+        dat,
+        total_rows,
+        sort_state = current_sort,
+        ns = ns,
+        page = page,
+        page_size = page_size
+      )
     }, error = function(e) {
       shiny::tags$div(
         class = "blockr-table-error",
@@ -40,15 +145,26 @@ html_table_result <- function(result, block, session) {
 #'
 #' Constructs the HTML table structure with type indicators and row numbers.
 #'
-#' @param dat Data frame to display (already subset to n_rows)
+#' @param dat Data frame to display (already subset)
 #' @param total_rows Total number of rows in original data
+#' @param sort_state List with col (column name) and dir ("asc", "desc", or "none")
+#' @param ns Shiny namespace function
+#' @param page Current page number (default 1)
+#' @param page_size Number of rows per page (default 5)
 #'
 #' @return A shiny tagList containing the table HTML
 #'
 #' @keywords internal
-build_html_table <- function(dat, total_rows) {
+build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
+                             page = 1L, page_size = 5L) {
   n_showing <- nrow(dat)
   n_cols <- ncol(dat)
+
+  sort_col <- sort_state$col
+  sort_dir <- sort_state$dir
+
+  sort_input_id <- if (!is.null(ns)) ns("blockr_table_sort") else "blockr_table_sort"
+  page_input_id <- if (!is.null(ns)) ns("blockr_table_page") else "blockr_table_page"
 
   # Handle empty data frame
   if (n_cols == 0) {
@@ -56,80 +172,159 @@ build_html_table <- function(dat, total_rows) {
       shiny::tagList(
         shiny::tags$div(
           class = "blockr-table-container",
+          `data-sort-input` = sort_input_id,
+          `data-page-input` = page_input_id,
           shiny::tags$div(
-            class = "blockr-table-info",
-            "Empty data frame (0 columns)"
+            class = "blockr-table-footer",
+            shiny::tags$span(class = "blockr-table-range", "Empty data frame (0 columns)")
           )
         ),
-        table_preview_css()
+        table_preview_css(),
+        table_sort_js(),
+        table_pagination_js()
       )
     )
   }
 
-  # Build header row
-  header_cells <- list(
-    shiny::tags$th(class = "blockr-row-number", "")
-  )
+  col_names <- names(dat)
 
-  for (col_name in names(dat)) {
-    type_label <- col_type_label(dat[[col_name]])
-    header_cells <- c(header_cells, list(
-      shiny::tags$th(
-        col_name,
-        shiny::tags$span(class = "blockr-type-label", type_label)
+  # Pre-compute column metadata
+  col_is_numeric <- vapply(dat, is.numeric, logical(1))
+  col_types <- vapply(dat, col_type_label, character(1))
+
+  # Pre-format all columns
+  old_opts <- options(cli.num_colors = 1)
+  on.exit(options(old_opts), add = TRUE)
+
+  formatted <- lapply(dat, format_column_inner)
+
+  # Pre-compute NA and negative masks
+  col_na <- lapply(dat, is.na)
+  col_neg <- Map(function(vec, is_num) {
+    if (is_num) !is.na(vec) & vec < 0 else rep(FALSE, length(vec))
+  }, dat, col_is_numeric)
+
+  # Build header row
+  header_cells <- vector("list", n_cols + 1L)
+  header_cells[[1L]] <- shiny::tags$th(class = "blockr-row-number", "")
+  for (j in seq_along(col_names)) {
+    col_name <- col_names[j]
+
+    # Determine sort class for this column
+    header_class <- "blockr-sortable"
+    sort_icon_class <- "blockr-sort-icon"
+    if (!is.null(sort_col) && sort_col == col_name && sort_dir != "none") {
+      sort_class_suffix <- switch(
+        sort_dir,
+        asc = " blockr-sort-asc",
+        desc = " blockr-sort-desc",
+        na = " blockr-sort-na",
+        ""
       )
-    ))
+      header_class <- paste0(header_class, sort_class_suffix)
+      icon_class_suffix <- switch(
+        sort_dir,
+        asc = " blockr-sort-icon-asc",
+        desc = " blockr-sort-icon-desc",
+        na = " blockr-sort-icon-na",
+        ""
+      )
+      sort_icon_class <- paste0(sort_icon_class, icon_class_suffix)
+    }
+
+    header_cells[[j + 1L]] <- shiny::tags$th(
+      class = header_class,
+      `data-column` = col_name,
+      shiny::tags$span(class = "blockr-col-name", col_name),
+      shiny::tags$span(
+        class = "blockr-type-row",
+        shiny::tags$span(class = "blockr-type-label", col_types[j]),
+        shiny::tags$span(class = sort_icon_class)
+      )
+    )
   }
 
   # Build body rows
-  body_rows <- list()
+  body_rows <- vector("list", n_showing)
+  start_row_num <- (page - 1L) * page_size
 
-  if (n_showing > 0) {
-    for (i in seq_len(n_showing)) {
-      row_cells <- list(
-        shiny::tags$td(class = "blockr-row-number", i)
-      )
+  for (i in seq_len(n_showing)) {
+    row_cells <- vector("list", n_cols + 1L)
+    row_cells[[1L]] <- shiny::tags$td(class = "blockr-row-number", start_row_num + i)
 
-      for (col_name in names(dat)) {
-        val <- dat[[col_name]][i]
-        is_numeric <- is.numeric(dat[[col_name]])
-        cell_class <- if (is_numeric) "blockr-td-numeric" else NULL
-        formatted_val <- format_cell_value(val)
+    for (j in seq_along(col_names)) {
+      is_na <- col_na[[j]][i]
+      is_neg <- col_neg[[j]][i]
 
-        row_cells <- c(row_cells, list(
-          shiny::tags$td(class = cell_class, formatted_val)
-        ))
+      cell_class <- if (col_is_numeric[j]) {
+        if (is_neg) "blockr-td-numeric blockr-negative" else "blockr-td-numeric"
+      } else {
+        NULL
       }
 
-      body_rows <- c(body_rows, list(
-        do.call(shiny::tags$tr, row_cells)
-      ))
+      content <- if (is_na) {
+        shiny::tags$span(class = "blockr-na", "NA")
+      } else {
+        formatted[[j]][i]
+      }
+
+      row_cells[[j + 1L]] <- shiny::tags$td(class = cell_class, content)
     }
+
+    body_rows[[i]] <- do.call(shiny::tags$tr, row_cells)
   }
 
-  # Build info text
-  info_text <- if (total_rows == 0) {
+  # Build pagination info
+  max_page <- max(1L, ceiling(total_rows / page_size))
+  start_row <- (page - 1L) * page_size + 1L
+  end_row <- min(page * page_size, total_rows)
+
+  range_text <- if (total_rows == 0) {
     "No rows"
-  } else if (n_showing >= total_rows) {
-    sprintf("Showing all %d rows", total_rows)
   } else {
-    sprintf("Showing %d of %d rows", n_showing, total_rows)
+    sprintf("%d\u2013%d of %d", start_row, end_row, total_rows)
   }
 
-  # Assemble table
+  footer <- shiny::tags$div(
+    class = "blockr-table-footer",
+    shiny::tags$span(class = "blockr-table-range", range_text),
+    shiny::tags$div(
+      class = "blockr-table-nav",
+      shiny::tags$button(
+        class = if (page == 1L) "blockr-nav-btn disabled" else "blockr-nav-btn",
+        disabled = if (page == 1L) "disabled" else NULL,
+        `data-direction` = "prev",
+        shiny::HTML("&#x2039;")
+      ),
+      shiny::tags$button(
+        class = if (page >= max_page) "blockr-nav-btn disabled" else "blockr-nav-btn",
+        disabled = if (page >= max_page) "disabled" else NULL,
+        `data-direction` = "next",
+        shiny::HTML("&#x203A;")
+      )
+    )
+  )
+
   shiny::tagList(
     shiny::tags$div(
       class = "blockr-table-container",
-      shiny::tags$table(
-        class = "blockr-table",
-        shiny::tags$thead(
-          do.call(shiny::tags$tr, header_cells)
-        ),
-        do.call(shiny::tags$tbody, body_rows)
+      `data-sort-input` = sort_input_id,
+      `data-page-input` = page_input_id,
+      shiny::tags$div(
+        class = "blockr-table-wrapper",
+        shiny::tags$table(
+          class = "blockr-table",
+          shiny::tags$thead(
+            do.call(shiny::tags$tr, header_cells)
+          ),
+          do.call(shiny::tags$tbody, body_rows)
+        )
       ),
-      shiny::tags$div(class = "blockr-table-info", info_text)
+      footer
     ),
-    table_preview_css()
+    table_preview_css(),
+    table_sort_js(),
+    table_pagination_js()
   )
 }
 
@@ -164,32 +359,27 @@ col_type_label <- function(x) {
   }
 }
 
-#' Format Cell Value
+#' Format Column
 #'
-#' Formats a single cell value for display.
+#' Formats an entire column vector for display using pillar's formatting.
 #'
-#' @param x A single value
+#' @param x A vector (column from data frame)
 #' @param max_chars Maximum characters before truncation (default 50)
 #'
-#' @return A formatted character string
+#' @return A character vector of formatted values
 #'
 #' @keywords internal
-format_cell_value <- function(x, max_chars = 50) {
-  if (is.na(x)) {
-    return("NA")
-  }
+format_column <- function(x, max_chars = 50) {
+  old_opts <- options(cli.num_colors = 1)
+  on.exit(options(old_opts), add = TRUE)
+  format_column_inner(x, max_chars)
+}
 
-  if (is.list(x)) {
-    return("<list>")
-  }
-
-  val <- as.character(x)
-
-  if (nchar(val) > max_chars) {
-    val <- paste0(substr(val, 1, max_chars - 3), "...")
-  }
-
-  val
+#' @rdname format_column
+#' @keywords internal
+format_column_inner <- function(x, max_chars = 50) {
+  shaft <- pillar::pillar_shaft(x)
+  trimws(format(shaft, width = max_chars))
 }
 
 #' Table Preview CSS
@@ -207,10 +397,22 @@ table_preview_css <- function() {
       width: 100%;
     }
 
+    .blockr-table-wrapper {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
     .blockr-table {
       border-collapse: collapse;
       width: 100%;
       font-size: var(--blockr-font-size-base, 0.875rem);
+    }
+
+    .blockr-table thead {
+      position: sticky;
+      top: 0;
+      background: white;
+      z-index: 1;
     }
 
     .blockr-table thead tr {
@@ -219,7 +421,7 @@ table_preview_css <- function() {
 
     .blockr-table th {
       text-align: left;
-      padding: 12px 16px;
+      padding: 10px 16px;
       font-weight: var(--blockr-font-weight-medium, 500);
       color: var(--blockr-color-text-primary, #111827);
       vertical-align: bottom;
@@ -230,12 +432,24 @@ table_preview_css <- function() {
       text-align: center;
     }
 
-    .blockr-type-label {
+    .blockr-col-name {
       display: block;
+      font-size: 14px;
+      font-weight: var(--blockr-font-weight-medium, 500);
+      color: var(--blockr-color-text-primary, #111827);
+    }
+
+    .blockr-type-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 2px;
+    }
+
+    .blockr-type-label {
       font-size: 11px;
       font-weight: var(--blockr-font-weight-normal, 400);
       color: var(--blockr-color-text-subtle, #9ca3af);
-      margin-top: 2px;
     }
 
     .blockr-table tbody tr {
@@ -248,7 +462,7 @@ table_preview_css <- function() {
     }
 
     .blockr-table td {
-      padding: 12px 16px;
+      padding: 10px 16px;
       font-size: var(--blockr-font-size-base, 0.875rem);
       color: var(--blockr-color-text-primary, #111827);
       max-width: 200px;
@@ -268,21 +482,181 @@ table_preview_css <- function() {
       font-variant-numeric: tabular-nums;
     }
 
-    .blockr-table-info {
-      padding: 12px 16px;
+    .blockr-table .blockr-negative {
+      color: var(--blockr-color-negative, #F43F5E);
+    }
+
+    .blockr-table .blockr-na {
+      color: var(--blockr-color-text-subtle, #9ca3af);
       font-size: var(--blockr-font-size-xs, 0.75rem);
-      color: var(--blockr-color-text-muted, #6b7280);
+    }
+
+    .blockr-table-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-top: 1px solid var(--blockr-color-border, #e5e7eb);
+    }
+
+    .blockr-table-range {
+      font-size: 12px;
+      color: #6B7280;
+    }
+
+    .blockr-table-nav {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .blockr-nav-btn {
+      padding: 4px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #4B5563;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .blockr-nav-btn:hover:not(.disabled) {
+      background-color: #F3F4F6;
+    }
+
+    .blockr-nav-btn.disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .blockr-table th.blockr-sortable {
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.15s ease;
+    }
+
+    .blockr-table th.blockr-sortable:hover {
+      background-color: var(--blockr-color-bg-subtle, #f9fafb);
+    }
+
+    .blockr-sort-icon {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      font-size: 10px;
+      line-height: 12px;
+      text-align: center;
+    }
+
+    .blockr-sort-icon-asc::after {
+      content: '\\2191';
+      color: #374151;
+    }
+
+    .blockr-sort-icon-desc::after {
+      content: '\\2193';
+      color: #374151;
+    }
+
+    .blockr-sort-icon-na::after {
+      content: '\\2205';
+      color: #374151;
+    }
+  "))
+}
+
+#' Table Sort JavaScript
+#'
+#' Returns JavaScript for handling column header clicks to toggle sort.
+#' Reads the input ID from the parent container's data-sort-input attribute.
+#'
+#' @return A shiny tags$script element
+#'
+#' @keywords internal
+table_sort_js <- function() {
+  shiny::tags$script(shiny::HTML("
+    if (!window.blockrSortInit) {
+      window.blockrSortInit = true;
+      document.addEventListener('click', function(e) {
+        var header = e.target.closest('.blockr-sortable');
+        if (!header) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var container = header.closest('.blockr-table-container');
+        var inputId = container ? container.dataset.sortInput : null;
+        if (!inputId) return;
+
+        var col = header.dataset.column;
+        var currentDir = header.classList.contains('blockr-sort-asc') ? 'asc' :
+                         header.classList.contains('blockr-sort-desc') ? 'desc' :
+                         header.classList.contains('blockr-sort-na') ? 'na' : 'none';
+        // Cycle: none -> asc -> desc -> na -> none
+        var newDir = currentDir === 'none' ? 'asc' :
+                     currentDir === 'asc' ? 'desc' :
+                     currentDir === 'desc' ? 'na' : 'none';
+        Shiny.setInputValue(inputId, {col: col, dir: newDir}, {priority: 'event'});
+      });
+    }
+  "))
+}
+
+#' Table Pagination JavaScript
+#'
+#' Returns JavaScript for handling pagination button clicks.
+#' Reads the input ID from the parent container's data-page-input attribute.
+#'
+#' @return A shiny tags$script element
+#'
+#' @keywords internal
+table_pagination_js <- function() {
+  shiny::tags$script(shiny::HTML("
+    if (!window.blockrPaginationInit) {
+      window.blockrPaginationInit = true;
+      document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.blockr-nav-btn');
+        if (!btn || btn.classList.contains('disabled')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var container = btn.closest('.blockr-table-container');
+        var inputId = container ? container.dataset.pageInput : null;
+        if (!inputId) return;
+        var direction = btn.dataset.direction;
+        Shiny.setInputValue(inputId, direction, {priority: 'event'});
+      });
     }
   "))
 }
 
 
+# --- S3 method overrides (opt-in via option) ---
+
 #' @export
 block_output.data_block <- function(x, result, session) {
-  html_table_result(result, x, session)
+  use_html_preview <- getOption("blockr.html_table_preview", FALSE)
+
+  if (use_html_preview) {
+    html_table_result(result, x, session)
+  } else {
+    # Call original blockr.core method
+    original_method <- get_original_block_output_data_block()
+    if (!is.null(original_method)) {
+      original_method(x, result, session)
+    }
+  }
 }
 
 #' @export
 block_ui.data_block <- function(id, x, ...) {
-  shiny::tagList(shiny::uiOutput(shiny::NS(id, "result")))
+  use_html_preview <- getOption("blockr.html_table_preview", FALSE)
+
+  if (use_html_preview) {
+    shiny::tagList(shiny::uiOutput(shiny::NS(id, "result")))
+  } else {
+    # Call original blockr.core method
+    original_method <- get_original_block_ui_data_block()
+    if (!is.null(original_method)) {
+      original_method(id, x, ...)
+    }
+  }
 }

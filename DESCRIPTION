@@ -14,13 +14,14 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
     blockr.core,
+    dplyr,
     evaluate,
+    pillar,
     shiny,
     shinyAce,
     shinyjs,
     DT,
     gt
 Suggests:
-    dplyr,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
