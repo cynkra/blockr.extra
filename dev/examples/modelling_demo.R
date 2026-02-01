@@ -11,19 +11,18 @@ run_app(
     # Data source
     data = new_dataset_block("mtcars"),
 
-    # Fit linear model (list() = multi-select for predictors)
+    # Fit linear model - named list() for multi-select with labels
     model = new_function_block(
-      "function(data, response = c('mpg', 'hp', 'wt'), predictors = list('wt', 'hp', 'disp', 'cyl')) {
+      "function(data, response = c('MPG' = 'mpg', 'Horsepower' = 'hp', 'Weight' = 'wt'), predictors = list('Weight' = 'wt', 'Horsepower' = 'hp', 'Displacement' = 'disp', 'Cylinders' = 'cyl')) {
         formula <- as.formula(paste(response, '~', paste(predictors, collapse = ' + ')))
         lm(formula, data = data)
       }"
     ),
 
-    # Diagnostic plot (base R plot.lm) - user can pick which one
+    # Diagnostic plot - named c() maps labels to values
     diagnostics = new_function_block(
-      "function(data, diagnostic = c('Residuals vs Fitted', 'Normal Q-Q', 'Scale-Location', 'Cooks Distance', 'Residuals vs Leverage', 'Cooks vs Leverage')) {
-        which <- match(diagnostic, c('Residuals vs Fitted', 'Normal Q-Q', 'Scale-Location', 'Cooks Distance', 'Residuals vs Leverage', 'Cooks vs Leverage'))
-        plot(data, which = which)
+      "function(data, diagnostic = c('Residuals vs Fitted' = 1, 'Normal Q-Q' = 2, 'Scale-Location' = 3, 'Cooks Distance' = 4, 'Residuals vs Leverage' = 5, 'Cooks vs Leverage' = 6)) {
+        plot(data, which = diagnostic)
       }"
     ),
 

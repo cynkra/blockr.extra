@@ -439,22 +439,30 @@ default_val <- tryCatch(
 shiny::div(
   class = "block-input-wrapper",
   if (is.list(default_val) && !is.data.frame(default_val)) {
-    # list() -> multi-select
+    # list() -> multi-select (names become labels, values are actual values)
     choices <- unlist(default_val)
     shiny::selectInput(
       inputId = input_id,
       label = label,
       choices = choices,
-      selected = choices,
+      selected = unname(choices),
       multiple = TRUE
     )
   } else if (is.character(default_val) && length(default_val) > 1) {
-    # Multiple character values -> single selectInput
+    # c() with multiple values -> single selectInput (names become labels)
     shiny::selectInput(
       inputId = input_id,
       label = label,
       choices = default_val,
-      selected = default_val[1]
+      selected = unname(default_val[1])
+    )
+  } else if (is.numeric(default_val) && length(default_val) > 1) {
+    # Numeric vector -> single selectInput (names become labels)
+    shiny::selectInput(
+      inputId = input_id,
+      label = label,
+      choices = default_val,
+      selected = unname(default_val[1])
     )
   } else if (is.numeric(default_val) && length(default_val) == 1) {
     # Single numeric -> numericInput
@@ -476,14 +484,6 @@ shiny::div(
       inputId = input_id,
       label = label,
       value = default_val
-    )
-  } else if (is.numeric(default_val) && length(default_val) > 1) {
-    # Multiple numeric values -> selectInput (treat as choices)
-    shiny::selectInput(
-      inputId = input_id,
-      label = label,
-      choices = default_val,
-      selected = default_val[1]
     )
   } else if (is.null(default_val)) {
     # NULL default -> textInput (common for .id parameters)
