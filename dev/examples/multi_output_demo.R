@@ -3,6 +3,9 @@
 library(blockr)
 pkgload::load_all()
 
+# Enable the new HTML table preview (with sorting and pagination)
+options(blockr.html_table_preview = TRUE)
+
 run_app(
   blocks = c(
     data = new_dataset_block("iris"),
