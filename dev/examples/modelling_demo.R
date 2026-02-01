@@ -21,7 +21,8 @@ run_app(
 
     # Diagnostic plot (base R plot.lm) - user can pick which one
     diagnostics = new_function_block(
-      "function(data, which = c(1, 2, 3, 4, 5, 6)) {
+      "function(data, diagnostic = c('Residuals vs Fitted', 'Normal Q-Q', 'Scale-Location', 'Cooks Distance', 'Residuals vs Leverage', 'Cooks vs Leverage')) {
+        which <- match(diagnostic, c('Residuals vs Fitted', 'Normal Q-Q', 'Scale-Location', 'Cooks Distance', 'Residuals vs Leverage', 'Cooks vs Leverage'))
         plot(data, which = which)
       }"
     ),
