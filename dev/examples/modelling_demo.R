@@ -27,21 +27,19 @@ run_app(
       }"
     ),
 
-    # Model summary as HTML table using broom
+    # Model summary using gtsummary
     summary_tbl = new_function_block(
       "function(data) {
-        broom::tidy(data) |>
-          gt::gt() |>
-          gt::fmt_number(decimals = 4) |>
-          gt::tab_header(title = 'Model Coefficients')
+        gtsummary::tbl_regression(data) |>
+          gtsummary::as_gt()
       }"
     ),
 
-    # Model fit statistics
+    # Model fit statistics using broom
     fit_stats = new_function_block(
       "function(data) {
         broom::glance(data) |>
-          tidyr::pivot_longer(everything(), names_to = 'Statistic', values_to = 'Value') |>
+          tidyr::pivot_longer(tidyr::everything(), names_to = 'Statistic', values_to = 'Value') |>
           gt::gt() |>
           gt::fmt_number(columns = 'Value', decimals = 4) |>
           gt::tab_header(title = 'Model Fit Statistics')
