@@ -111,6 +111,7 @@ blockr.core::new_block(
         r_fn <- shiny::reactiveVal(fn)
         r_fn_text <- shiny::reactiveVal(fn_text)
         r_error <- shiny::reactiveVal(NULL)
+        r_version <- shiny::reactiveVal(0L)
 
         # Get argument names for variadic inputs
         arg_names <- shiny::reactive(
@@ -148,8 +149,22 @@ blockr.core::new_block(
             r_fn(result$fn)
             r_fn_text(result$text)
             r_error(NULL)
+            r_version(r_version() + 1L)
           } else {
             r_error(result$error)
+          }
+        })
+
+        # Display errors to user
+        output$error_display <- shiny::renderUI({
+          err <- r_error()
+          if (!is.null(err)) {
+            shiny::div(
+              class = "function-block-error",
+              shiny::icon("exclamation-triangle"),
+              " ",
+              err
+            )
           }
         })
 
@@ -219,6 +234,8 @@ blockr.core::new_block(
         # Build expression
         list(
           expr = shiny::reactive({
+            # Force re-evaluation when function is updated via Apply button
+            r_version()
             current_fn <- r_fn()
             shiny::req(current_fn)
             params <- get_param_values()
