@@ -8,36 +8,41 @@
 #' @return The result (could be any R object, including recordedplot)
 #' @noRd
 eval_with_plot_capture <- function(expr, env) {
-  # Use a null device to suppress any plot output during initial eval
-  grDevices::pdf(nullfile())
-  on.exit(grDevices::dev.off(), add = TRUE)
+  expr_text <- paste(deparse(expr), collapse = "\n")
 
-  result <- eval(expr, env)
+  # Create environment with access to all attached packages (stats, graphics, etc.)
+  eval_env <- list2env(as.list(env), parent = .GlobalEnv)
 
-  # If result is a ggplot, return it directly (no need for recordedplot)
+  # Use evaluate to run code and capture any plots
+  res <- evaluate::evaluate(
+    expr_text,
+    eval_env,
+    stop_on_error = 1L,
+    output_handler = evaluate::new_output_handler(value = identity)
+  )
+
+  result <- NULL
+  recorded_plot <- NULL
+
+  for (item in res) {
+    if (inherits(item, "recordedplot")) {
+      # Keep the last plot (in case of multiple snapshots)
+      recorded_plot <- item
+    } else if (inherits(item, "error")) {
+      stop(conditionMessage(item))
+    } else if (!inherits(item, c("source", "message", "warning"))) {
+      # This is likely the return value
+      result <- item
+    }
+  }
+
+  # Priority: ggplot result > recorded plot > other result
   if (inherits(result, "ggplot")) {
     return(result)
   }
 
-  # If result is NULL, a base R plot might have been created
-  # Use evaluate to capture it properly
-  if (is.null(result)) {
-    expr_text <- paste(deparse(expr), collapse = "\n")
-
-    # Create fresh environment with same data
-    env2 <- new.env(parent = parent.env(env))
-    for (nm in ls(env, all.names = TRUE)) {
-      env2[[nm]] <- env[[nm]]
-    }
-
-    res <- evaluate::evaluate(expr_text, env2, stop_on_error = 1L)
-
-    # Check for recorded plot - return the last one since iterative plots
-    # (e.g., plot() followed by text() calls) produce multiple snapshots
-    recorded_plots <- Filter(function(r) inherits(r, "recordedplot"), res)
-    if (length(recorded_plots) > 0) {
-      return(recorded_plots[[length(recorded_plots)]])
-    }
+  if (!is.null(recorded_plot)) {
+    return(recorded_plot)
   }
 
   result
