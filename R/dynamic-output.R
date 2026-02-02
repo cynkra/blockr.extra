@@ -32,10 +32,11 @@ eval_with_plot_capture <- function(expr, env) {
 
     res <- evaluate::evaluate(expr_text, env2, stop_on_error = 1L)
 
-    # Check for recorded plot
+    # Check for recorded plot - return the last one since iterative plots
+    # (e.g., plot() followed by text() calls) produce multiple snapshots
     recorded_plots <- Filter(function(r) inherits(r, "recordedplot"), res)
     if (length(recorded_plots) > 0) {
-      return(recorded_plots[[1]])
+      return(recorded_plots[[length(recorded_plots)]])
     }
   }
 
