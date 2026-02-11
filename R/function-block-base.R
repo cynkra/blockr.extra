@@ -8,6 +8,38 @@
 NULL
 
 
+#' Coerce to reactiveVal
+#'
+#' If `x` is already a reactiveVal, return it; otherwise create one with
+#' `default` as initial value.
+#'
+#' @param x Value to coerce
+#' @param default Initial value if a new reactiveVal is created
+#' @return A reactiveVal
+#' @noRd
+as_rv <- function(x, default = x) {
+  if (inherits(x, "reactiveVal")) x else shiny::reactiveVal(default)
+}
+
+
+#' Ensure fn is a character string
+#'
+#' If `fn` is already a function, deparse it back to a string.
+#' If it's a string, return as-is.
+#'
+#' @param fn A function object or character string of R function code
+#' @return Character string
+#' @noRd
+as_fn_text <- function(fn) {
+  if (is.function(fn)) {
+    paste(deparse(fn), collapse = "\n")
+  } else {
+    stopifnot(is.character(fn), length(fn) == 1L)
+    fn
+  }
+}
+
+
 #' Parse function code from text
 #'
 #' @param fn_text Character string containing R function code
@@ -314,8 +346,7 @@ create_input_for_arg <- function(arg_name, default, ns, strip_leading_dot = FALS
 #' @param input Shiny input
 #' @param output Shiny output
 #' @param session Shiny session
-#' @param fn Initial function object
-#' @param fn_text Initial function code text
+#' @param fn_text Initial function code text (string or reactiveVal)
 #' @param required_args Character vector of required argument names
 #' @param skip_args Character vector of argument names to skip in UI
 #' @param error_message Error message for validation failure
@@ -326,7 +357,6 @@ setup_function_block_server <- function(
     input,
     output,
     session,
-    fn,
     fn_text,
     required_args,
     skip_args,
@@ -334,44 +364,55 @@ setup_function_block_server <- function(
     strip_leading_dot = FALSE
 ) {
   # Reactive values to store current function state
-r_fn <- shiny::reactiveVal(fn)
-r_fn_text <- shiny::reactiveVal(fn_text)
-r_error <- shiny::reactiveVal(NULL)
-r_version <- shiny::reactiveVal(0L)
+  r_fn_text <- as_rv(fn_text, fn_text)
+  r_fn <- shiny::reactiveVal(parse_function_code(shiny::isolate(r_fn_text())))
+  r_error <- shiny::reactiveVal(NULL)
+  r_version <- shiny::reactiveVal(0L)
 
-# Parse and validate function when code changes
-shiny::observeEvent(input$submit_fn, {
-  code <- input$fn_code
-  if (is.null(code) || trimws(code) == "") {
-    r_error("Function code is empty")
-    return()
-  }
-
-  result <- tryCatch(
-    {
-      parsed <- parse(text = code)
-      evaluated <- eval(parsed)
-      if (!is.function(evaluated)) {
-        stop("Code must evaluate to a function")
-      }
-      # Validate required arguments
-      validate_function_args(evaluated, required_args, error_message)
-      list(success = TRUE, fn = evaluated, text = code)
-    },
-    error = function(e) {
-      list(success = FALSE, error = conditionMessage(e))
+  # Reverse sync: reactiveVal -> Ace editor (for AI/external updates)
+  shiny::observeEvent(r_fn_text(), {
+    if (!identical(r_fn_text(), input$fn_code)) {
+      shinyAce::updateAceEditor(session, "fn_code", value = r_fn_text())
     }
-  )
+    result <- tryCatch({
+      parsed <- eval(parse(text = r_fn_text()))
+      if (!is.function(parsed)) stop("Code must evaluate to a function")
+      validate_function_args(parsed, required_args, error_message)
+      list(success = TRUE, fn = parsed)
+    }, error = function(e) list(success = FALSE, error = conditionMessage(e)))
+    if (result$success) {
+      r_fn(result$fn)
+      r_error(NULL)
+      r_version(r_version() + 1L)
+    } else {
+      r_error(result$error)
+    }
+  }, ignoreInit = TRUE)
 
-  if (result$success) {
-    r_fn(result$fn)
-    r_fn_text(result$text)
-    r_error(NULL)
-    r_version(r_version() + 1L)
-  } else {
-    r_error(result$error)
-  }
-})
+  # Parse and validate function when user clicks Apply
+  shiny::observeEvent(input$submit_fn, {
+    code <- input$fn_code
+    if (is.null(code) || trimws(code) == "") {
+      r_error("Function code is empty")
+      return()
+    }
+
+    result <- tryCatch({
+      parsed <- eval(parse(text = code))
+      if (!is.function(parsed)) stop("Code must evaluate to a function")
+      validate_function_args(parsed, required_args, error_message)
+      list(success = TRUE, fn = parsed, text = code)
+    }, error = function(e) list(success = FALSE, error = conditionMessage(e)))
+
+    if (result$success) {
+      r_fn_text(result$text)
+      r_fn(result$fn)
+      r_error(NULL)
+      r_version(r_version() + 1L)
+    } else {
+      r_error(result$error)
+    }
+  })
 
 # Display errors to user
 output$error_display <- shiny::renderUI({

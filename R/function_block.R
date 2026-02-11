@@ -45,9 +45,9 @@ new_function_block <- function(
     fn = "function(data, n = 6L) { utils::head(data, n) }",
     ...) {
 
-  fn_text <- fn
-  fn <- parse_function_code(fn_text)
-  validate_function_args(fn, "data", "Function must have 'data' as its first argument")
+  fn <- as_fn_text(fn)
+  parsed <- parse_function_code(fn)
+  validate_function_args(parsed, "data", "Function must have 'data' as its first argument")
 
   blockr.core::new_block(
     server = function(id, data) {
@@ -59,8 +59,7 @@ new_function_block <- function(
             input = input,
             output = output,
             session = session,
-            fn = fn,
-            fn_text = fn_text,
+            fn_text = fn,
             required_args = "data",
             skip_args = "data",
             error_message = "Function must have 'data' as its first argument"
@@ -83,9 +82,7 @@ new_function_block <- function(
               })
             }),
             state = list(
-              fn = shiny::reactive({
-                base$r_fn_text()
-              })
+              fn = base$r_fn_text
             )
           )
         }
@@ -95,12 +92,13 @@ new_function_block <- function(
       ns <- shiny::NS(id)
       function_block_ui(
         ns = ns,
-        fn_text = fn_text,
+        fn_text = fn,
         hint_text = "Function must have 'data' as first argument"
       )
     },
     class = "function_block",
     allow_empty_state = TRUE,
+    external_ctrl = "fn",
     ...
   )
 }

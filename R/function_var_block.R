@@ -65,9 +65,9 @@ new_function_var_block <- function(
     fn = "function(...) { dplyr::bind_rows(...) }",
     ...) {
 
-  fn_text <- fn
-  fn <- parse_function_code(fn_text)
-  validate_function_args(fn, "...", "Function must have '...' as its first argument")
+  fn <- as_fn_text(fn)
+  parsed <- parse_function_code(fn)
+  validate_function_args(parsed, "...", "Function must have '...' as its first argument")
 
   # Helper function to extract argument names for variadic blocks
   dot_args_names <- function(x) {
@@ -95,8 +95,7 @@ new_function_var_block <- function(
             input = input,
             output = output,
             session = session,
-            fn = fn,
-            fn_text = fn_text,
+            fn_text = fn,
             required_args = "...",
             skip_args = "...",
             error_message = "Function must have '...' as its first argument",
@@ -130,9 +129,7 @@ new_function_var_block <- function(
               ), splice = TRUE)
             }),
             state = list(
-              fn = shiny::reactive({
-                base$r_fn_text()
-              })
+              fn = base$r_fn_text
             )
           )
         }
@@ -142,7 +139,7 @@ new_function_var_block <- function(
       ns <- shiny::NS(id)
       function_block_ui(
         ns = ns,
-        fn_text = fn_text,
+        fn_text = fn,
         hint_text = "Function must have '...' as first argument",
         class_prefix = "function-block"
       )
@@ -152,6 +149,7 @@ new_function_var_block <- function(
     },
     class = "function_var_block",
     allow_empty_state = TRUE,
+    external_ctrl = "fn",
     ...
   )
 }

@@ -63,10 +63,10 @@ new_function_xy_block <- function(
     fn = "function(x, y) { dplyr::bind_rows(x, y) }",
     ...) {
 
-  fn_text <- fn
-  fn <- parse_function_code(fn_text)
+  fn <- as_fn_text(fn)
+  parsed <- parse_function_code(fn)
   validate_function_args(
-    fn,
+    parsed,
     c("x", "y"),
     "Function must have 'x' as first argument and 'y' as second argument"
   )
@@ -81,8 +81,7 @@ new_function_xy_block <- function(
             input = input,
             output = output,
             session = session,
-            fn = fn,
-            fn_text = fn_text,
+            fn_text = fn,
             required_args = c("x", "y"),
             skip_args = c("x", "y"),
             error_message = "Function must have 'x' as first argument and 'y' as second argument"
@@ -105,9 +104,7 @@ new_function_xy_block <- function(
               })
             }),
             state = list(
-              fn = shiny::reactive({
-                base$r_fn_text()
-              })
+              fn = base$r_fn_text
             )
           )
         }
@@ -117,12 +114,13 @@ new_function_xy_block <- function(
       ns <- shiny::NS(id)
       function_block_ui(
         ns = ns,
-        fn_text = fn_text,
+        fn_text = fn,
         hint_text = "Function must have 'x' and 'y' as first two arguments"
       )
     },
     class = "function_xy_block",
     allow_empty_state = TRUE,
+    external_ctrl = "fn",
     ...
   )
 }
