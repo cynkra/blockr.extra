@@ -264,6 +264,19 @@ create_input_for_arg <- function(arg_name, default, ns, strip_leading_dot = FALS
   }
   label <- paste0(toupper(substr(label, 1, 1)), substring(label, 2))
 
+  # Handle missing defaults (arguments without default values)
+  if (identical(default, quote(expr = ))) {
+    return(shiny::div(
+      class = "block-input-wrapper",
+      shiny::textInput(
+        inputId = input_id,
+        label = label,
+        value = "",
+        placeholder = "No default"
+      )
+    ))
+  }
+
   # Evaluate the default if it's a call/expression
   default_val <- tryCatch(
     eval(default),

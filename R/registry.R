@@ -48,9 +48,17 @@ register_extra_blocks <- function() {
           fn = "A string of R code that evaluates to a function. The function must have 'data' as its first argument (the input data frame). Additional arguments with defaults become UI widgets."
         ),
         examples = list(
-          fn = "function(data, n = 6L) { utils::head(data, n) }"
+          fn = "function(data, column = c('Sepal.Length' = 'Sepal.Length', 'Sepal.Width' = 'Sepal.Width'), n = 6L, descending = FALSE) { data <- data[order(data[[column]], decreasing = descending), ]; utils::head(data, n) }"
         ),
-        prompt = "Write a complete R function as a string. The function receives 'data' (a data frame) as its first argument. Use default values for additional parameters to generate UI controls."
+        prompt = paste(
+          "Write the value of fn as a SINGLE-LINE R function string (no newlines inside the string — this is critical because the value is embedded in JSON).",
+          "The function MUST have 'data' as its first argument.",
+          "ALL additional parameters MUST have default values — a parameter without a default will crash the app.",
+          "Default value types map to UI widgets: character vector with multiple elements c('A' = 'a', 'B' = 'b') -> dropdown; single numeric -> number input; single logical -> checkbox; single character string -> text input.",
+          "For dropdown parameters, use a named c() vector where names are display labels and values are the actual values, e.g. column = c('Sepal.Length' = 'Sepal.Length', 'Petal.Width' = 'Petal.Width').",
+          "Use column names from the actual data provided for any column-selection parameters.",
+          "Wrap the entire function body in curly braces on one line, separating statements with semicolons."
+        )
       ),
       # new_function_xy_block:
       structure(
