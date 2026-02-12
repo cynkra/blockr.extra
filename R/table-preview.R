@@ -188,6 +188,13 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
 
   col_names <- names(dat)
 
+  # Extract column labels (e.g. from ADaM datasets)
+  col_labels <- vapply(dat, function(x) {
+    lbl <- attr(x, "label")
+    if (is.null(lbl)) "" else lbl
+  }, character(1))
+  has_labels <- any(nzchar(col_labels))
+
   # Pre-compute column metadata
   col_is_numeric <- vapply(dat, is.numeric, logical(1))
   col_types <- vapply(dat, col_type_label, character(1))
@@ -232,10 +239,24 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
       sort_icon_class <- paste0(sort_icon_class, icon_class_suffix)
     }
 
+    label_tag <- if (has_labels && nzchar(col_labels[j])) {
+      truncated <- if (nchar(col_labels[j]) > 20) {
+        paste0(substr(col_labels[j], 1, 18), "\u2026")
+      } else {
+        col_labels[j]
+      }
+      shiny::tags$span(
+        class = "blockr-col-label",
+        title = col_labels[j],
+        truncated
+      )
+    }
+
     header_cells[[j + 1L]] <- shiny::tags$th(
       class = header_class,
       `data-column` = col_name,
       shiny::tags$span(class = "blockr-col-name", col_name),
+      label_tag,
       shiny::tags$span(
         class = "blockr-type-row",
         shiny::tags$span(class = "blockr-type-label", col_types[j]),
@@ -439,6 +460,18 @@ table_preview_css <- function() {
       color: var(--blockr-color-text-primary, #111827);
     }
 
+    .blockr-col-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--blockr-color-text-subtle, #9ca3af);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 120px;
+      margin-top: 1px;
+    }
+
     .blockr-type-row {
       display: flex;
       align-items: center;
@@ -559,9 +592,17 @@ table_preview_css <- function() {
       color: #374151;
     }
 
+    .blockr-sort-icon-na {
+      width: auto;
+    }
+
     .blockr-sort-icon-na::after {
-      content: '\\2205';
+      content: 'NA\\2191';
       color: #374151;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      white-space: nowrap;
     }
   "))
 }
