@@ -240,20 +240,37 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
     }
 
     label_tag <- if (has_labels && nzchar(col_labels[j])) {
-      truncated <- if (nchar(col_labels[j]) > 20) {
+      is_truncated <- nchar(col_labels[j]) > 20
+      display_text <- if (is_truncated) {
         paste0(substr(col_labels[j], 1, 18), "\u2026")
       } else {
         col_labels[j]
       }
-      shiny::tags$span(
+      label_args <- list(
         class = "blockr-col-label",
-        title = col_labels[j],
-        truncated
+        display_text
       )
+      if (is_truncated) {
+        label_args[["data-full-label"]] <- col_labels[j]
+      }
+      do.call(shiny::tags$span, label_args)
     }
+
+    # Compute min-width from header text length so columns aren't narrower
+
+    # than their header when data values are short
+    name_width <- nchar(col_name) * 8 + 32
+    label_width <- if (has_labels && nzchar(col_labels[j])) {
+      min(nchar(col_labels[j]), 20) * 7 + 32
+    } else {
+      0
+    }
+    min_width <- min(max(name_width, label_width, 60), 250)
+    th_style <- sprintf("min-width: %dpx;", min_width)
 
     header_cells[[j + 1L]] <- shiny::tags$th(
       class = header_class,
+      style = th_style,
       `data-column` = col_name,
       shiny::tags$span(class = "blockr-col-name", col_name),
       label_tag,
@@ -289,7 +306,8 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
         formatted[[j]][i]
       }
 
-      row_cells[[j + 1L]] <- shiny::tags$td(class = cell_class, content)
+      cell_title <- if (!is_na) formatted[[j]][i] else NULL
+      row_cells[[j + 1L]] <- shiny::tags$td(class = cell_class, title = cell_title, content)
     }
 
     body_rows[[i]] <- do.call(shiny::tags$tr, row_cells)
@@ -345,7 +363,8 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
     ),
     table_preview_css(),
     table_sort_js(),
-    table_pagination_js()
+    table_pagination_js(),
+    table_tooltip_js()
   )
 }
 
@@ -399,8 +418,12 @@ format_column <- function(x, max_chars = 50) {
 #' @rdname format_column
 #' @keywords internal
 format_column_inner <- function(x, max_chars = 50) {
-  shaft <- pillar::pillar_shaft(x)
-  trimws(format(shaft, width = max_chars))
+  if (is.character(x)) {
+    x
+  } else {
+    shaft <- pillar::pillar_shaft(x)
+    trimws(format(shaft, width = max_chars))
+  }
 }
 
 #' Table Preview CSS
@@ -421,6 +444,7 @@ table_preview_css <- function() {
     .blockr-table-wrapper {
       max-height: 400px;
       overflow-y: auto;
+      overflow-x: auto;
     }
 
     .blockr-table {
@@ -446,6 +470,7 @@ table_preview_css <- function() {
       font-weight: var(--blockr-font-weight-medium, 500);
       color: var(--blockr-color-text-primary, #111827);
       vertical-align: bottom;
+      overflow: hidden;
     }
 
     .blockr-table th.blockr-row-number {
@@ -458,18 +483,34 @@ table_preview_css <- function() {
       font-size: 14px;
       font-weight: var(--blockr-font-weight-medium, 500);
       color: var(--blockr-color-text-primary, #111827);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .blockr-col-label {
       display: block;
       font-size: 11px;
       font-weight: 400;
-      color: var(--blockr-color-text-subtle, #9ca3af);
+      color: var(--blockr-color-text-muted, #6b7280);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       max-width: 120px;
       margin-top: 1px;
+    }
+
+    .blockr-label-tooltip {
+      position: fixed;
+      background: #1f2937;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 400;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      z-index: 9999;
+      pointer-events: none;
     }
 
     .blockr-type-row {
@@ -482,7 +523,7 @@ table_preview_css <- function() {
     .blockr-type-label {
       font-size: 11px;
       font-weight: var(--blockr-font-weight-normal, 400);
-      color: var(--blockr-color-text-subtle, #9ca3af);
+      color: var(--blockr-color-text-subtle, #b0b7c3);
     }
 
     .blockr-table tbody tr {
@@ -604,6 +645,11 @@ table_preview_css <- function() {
       letter-spacing: -0.5px;
       white-space: nowrap;
     }
+
+    .shiny-html-output.recalculating:has(.blockr-table-container) {
+      --_shiny-fade-opacity: 1;
+      opacity: 1 !important;
+    }
   "))
 }
 
@@ -617,6 +663,69 @@ table_preview_css <- function() {
 #' @keywords internal
 table_sort_js <- function() {
   shiny::tags$script(shiny::HTML("
+    if (!window.blockrTableInit) {
+      window.blockrTableInit = true;
+      window.blockrScrollRestore = {};
+      window.blockrColumnWidths = {};
+      new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+          var output = m.target.closest('.shiny-html-output');
+          if (!output || !output.id) return;
+          var key = output.id;
+          var wrapper = output.querySelector('.blockr-table-wrapper');
+          if (!wrapper) return;
+          var table = wrapper.querySelector('.blockr-table');
+          if (!table || table.dataset.widthsLocked) return;
+
+          // Lock column widths to prevent layout shifts on sort/page
+          var allThs = table.querySelectorAll('thead th');
+          if (allThs.length === 0) return;
+          var dataThs = table.querySelectorAll('thead th[data-column]');
+          var colKey = Array.from(dataThs).map(function(th) {
+            return th.dataset.column;
+          }).join(',');
+          var stored = window.blockrColumnWidths[key];
+
+          if (stored && stored.colKey === colKey) {
+            // Apply stored widths from first render
+            table.style.tableLayout = 'fixed';
+            table.style.width = stored.totalWidth + 'px';
+            allThs.forEach(function(th, i) {
+              th.style.width = stored.widths[i] + 'px';
+            });
+            table.dataset.widthsLocked = '1';
+          } else {
+            // First render: capture widths after browser layout
+            requestAnimationFrame(function() {
+              var widths = Array.from(allThs).map(function(th) {
+                return th.offsetWidth;
+              });
+              window.blockrColumnWidths[key] = {
+                colKey: colKey,
+                widths: widths,
+                totalWidth: table.offsetWidth
+              };
+            });
+          }
+
+          // Restore scroll position if saved
+          var saved = window.blockrScrollRestore[key];
+          if (saved) {
+            if (saved.col) {
+              var th = wrapper.querySelector('th[data-column=\"' + saved.col + '\"]');
+              if (th) {
+                wrapper.scrollLeft = th.offsetLeft - saved.visualOffset;
+              } else {
+                wrapper.scrollLeft = saved.scrollLeft;
+              }
+            } else {
+              wrapper.scrollLeft = saved.scrollLeft;
+            }
+            delete window.blockrScrollRestore[key];
+          }
+        });
+      }).observe(document.body, { childList: true, subtree: true });
+    }
     if (!window.blockrSortInit) {
       window.blockrSortInit = true;
       document.addEventListener('click', function(e) {
@@ -629,6 +738,17 @@ table_sort_js <- function() {
         if (!inputId) return;
 
         var col = header.dataset.column;
+
+        // Save clicked column's visual position before re-render
+        var wrapper = container.querySelector('.blockr-table-wrapper');
+        var output = container.closest('.shiny-html-output');
+        if (wrapper && output) {
+          window.blockrScrollRestore[output.id] = {
+            scrollLeft: wrapper.scrollLeft,
+            col: col,
+            visualOffset: header.offsetLeft - wrapper.scrollLeft
+          };
+        }
         var currentDir = header.classList.contains('blockr-sort-asc') ? 'asc' :
                          header.classList.contains('blockr-sort-desc') ? 'desc' :
                          header.classList.contains('blockr-sort-na') ? 'na' : 'none';
@@ -662,8 +782,54 @@ table_pagination_js <- function() {
         var container = btn.closest('.blockr-table-container');
         var inputId = container ? container.dataset.pageInput : null;
         if (!inputId) return;
+
+        // Save scroll position before re-render
+        var wrapper = container.querySelector('.blockr-table-wrapper');
+        var output = container.closest('.shiny-html-output');
+        if (wrapper && output) {
+          window.blockrScrollRestore[output.id] = {
+            scrollLeft: wrapper.scrollLeft,
+            col: null
+          };
+        }
+
         var direction = btn.dataset.direction;
         Shiny.setInputValue(inputId, direction, {priority: 'event'});
+      });
+    }
+  "))
+}
+
+#' Table Label Tooltip JavaScript
+#'
+#' Returns JavaScript for showing full column labels on hover.
+#' Uses event delegation and position:fixed to escape overflow containers.
+#'
+#' @return A shiny tags$script element
+#'
+#' @keywords internal
+table_tooltip_js <- function() {
+  shiny::tags$script(shiny::HTML("
+    if (!window.blockrTooltipInit) {
+      window.blockrTooltipInit = true;
+      var tip = null;
+      document.addEventListener('mouseover', function(e) {
+        var label = e.target.closest('[data-full-label]');
+        if (!label) return;
+        if (tip) tip.remove();
+        tip = document.createElement('div');
+        tip.className = 'blockr-label-tooltip';
+        tip.textContent = label.dataset.fullLabel;
+        document.body.appendChild(tip);
+        var rect = label.getBoundingClientRect();
+        tip.style.left = rect.left + 'px';
+        tip.style.top = (rect.bottom + 4) + 'px';
+      });
+      document.addEventListener('mouseout', function(e) {
+        var label = e.target.closest('[data-full-label]');
+        if (!label || !tip) return;
+        tip.remove();
+        tip = null;
       });
     }
   "))
