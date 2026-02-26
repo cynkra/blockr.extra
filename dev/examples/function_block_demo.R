@@ -1,7 +1,7 @@
 # Load required libraries
 library(blockr)
 # library(blockr.extra)
-pkgload::load_all()
+pkgload::load_all("blockr.extra")
 
 library(blockr.session)
 
