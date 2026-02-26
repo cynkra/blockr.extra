@@ -11,23 +11,27 @@ register_extra_blocks <- function() {
       "new_function_xy_block",
       "new_function_var_block",
       "new_async_function_block",
-      "new_broom_summary_block"
+      "new_broom_summary_block",
+      "new_compare_block"
     ),
     name = c(
       "Function block",
       "Function XY block",
       "Function Var block",
       "Async Function block",
-      "Broom Summary"
+      "Broom Summary",
+      "Compare"
     ),
     description = c(
       "Transform data with a custom R function. UI auto-generated from function arguments.",
       "Transform two data frames (x, y) with a custom R function. UI auto-generated from function arguments.",
       "Transform multiple data frames (...) with a custom R function. UI auto-generated from function arguments.",
       "Transform data with a custom R function asynchronously. Requires mirai daemons. Click Run to execute.",
-      "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model."
+      "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
+      "Compare two data frames on key columns and compute diff metrics on measurement columns."
     ),
     category = c(
+      "transform",
       "transform",
       "transform",
       "transform",
@@ -39,7 +43,8 @@ register_extra_blocks <- function() {
       "code-slash",
       "code-slash",
       "hourglass-split",
-      "clipboard-data"
+      "clipboard-data",
+      "arrow-left-right"
     ),
     arguments = list(
       # new_function_block:
@@ -97,6 +102,8 @@ register_extra_blocks <- function() {
       # new_async_function_block:
       NULL,
       # new_broom_summary_block:
+      NULL,
+      # new_compare_block:
       NULL
     ),
     package = utils::packageName(),
