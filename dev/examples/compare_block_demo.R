@@ -1,13 +1,27 @@
 # Compare block demo: diff two data frames on shared keys
 # Uses dock board layout with DAG visualization
 
-library(blockr.core)
-library(blockr.dock)
-library(blockr.dag)
-library(blockr.extra)
+pkgload::load_all("blockr.core")
+pkgload::load_all("blockr.dag")
+pkgload::load_all("blockr.dock")
+pkgload::load_all("blockr.dm")
+pkgload::load_all("blockr.dplyr")
+pkgload::load_all("blockr.session")
 pkgload::load_all("blockr.extra")
+pkgload::load_all("blockr.sandbox")
+pkgload::load_all("blockr.ai")
+
+
 
 options(shiny.port = 7860, shiny.launch.browser = FALSE)
+
+
+options(
+  blockr.dock_is_locked = FALSE,
+  blockr.eval_parent_env = asNamespace("stats"), # ai needs this!
+  blockr.html_table_preview = TRUE
+)
+
 
 # --- Sample data: insurance pricing from two models ---
 baseline <- data.frame(
@@ -35,10 +49,6 @@ serve(
       from = c("base", "rev"),
       to = c("cmp", "cmp"),
       input = c("x", "y")
-    ),
-    stacks = c(
-      inputs = new_dock_stack(c("base", "rev")),
-      output = new_dock_stack("cmp")
     ),
     extensions = new_dag_extension()
   )

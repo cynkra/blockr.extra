@@ -31,38 +31,26 @@ new_compare_block <- function(
         id,
         function(input, output, session) {
 
-          r_key_cols <- shiny::reactiveVal(key_cols)
-          r_measure_cols <- shiny::reactiveVal(measure_cols)
+          r_key_cols <- blockr.dplyr::column_picker_server(
+            "key_picker",
+            get_choices = shiny::reactive(intersect(colnames(x()), colnames(y()))),
+            initial_value = shiny::reactiveVal(key_cols)
+          )
+          r_measure_cols <- blockr.dplyr::column_picker_server(
+            "measure_picker",
+            get_choices = shiny::reactive(intersect(colnames(x()), colnames(y()))),
+            initial_value = shiny::reactiveVal(measure_cols)
+          )
           r_join_type <- shiny::reactiveVal(join_type)
           r_metric <- shiny::reactiveVal(metric)
 
-          heuristic <- shiny::reactive({
-            classify_columns(x(), y())
-          })
-
+          # One-shot heuristic: fill defaults on first data load
           shiny::observe({
-            h <- heuristic()
-            common <- intersect(colnames(x()), colnames(y()))
+            h <- classify_columns(x(), y())
+            if (length(r_key_cols()) == 0) r_key_cols(h$key_cols)
+            if (length(r_measure_cols()) == 0) r_measure_cols(h$measure_cols)
+          }) |> shiny::bindEvent(x(), y(), once = TRUE)
 
-            sel_key <- if (length(r_key_cols()) == 0) h$key_cols else r_key_cols()
-            sel_meas <- if (length(r_measure_cols()) == 0) {
-              h$measure_cols
-            } else {
-              r_measure_cols()
-            }
-
-            shiny::updateSelectInput(
-              session, "key_cols",
-              choices = common, selected = sel_key
-            )
-            shiny::updateSelectInput(
-              session, "measure_cols",
-              choices = common, selected = sel_meas
-            )
-          })
-
-          shiny::observeEvent(input$key_cols, r_key_cols(input$key_cols))
-          shiny::observeEvent(input$measure_cols, r_measure_cols(input$measure_cols))
           shiny::observeEvent(input$join_type, r_join_type(input$join_type))
           shiny::observeEvent(input$metric, r_metric(input$metric))
 
@@ -96,37 +84,65 @@ new_compare_block <- function(
     },
     function(id) {
       shiny::tagList(
-        shiny::selectInput(
-          inputId = shiny::NS(id, "key_cols"),
-          label = "Key columns",
-          choices = key_cols,
-          selected = key_cols,
-          multiple = TRUE
-        ),
-        shiny::selectInput(
-          inputId = shiny::NS(id, "measure_cols"),
-          label = "Measurement columns",
-          choices = measure_cols,
-          selected = measure_cols,
-          multiple = TRUE
-        ),
-        shiny::selectInput(
-          inputId = shiny::NS(id, "join_type"),
-          label = "Join type",
-          choices = c("Inner" = "inner", "Full" = "full"),
-          selected = join_type
-        ),
-        shiny::selectInput(
-          inputId = shiny::NS(id, "metric"),
-          label = "Diff metric",
-          choices = c(
-            "Difference" = "diff",
-            "Absolute difference" = "abs_diff",
-            "Relative difference (%)" = "rel_diff",
-            "Ratio" = "ratio",
-            "Percent change" = "pct_change"
-          ),
-          selected = metric
+        shiny::tags$style(shiny::HTML("
+          .block-container { width: 100%; padding-bottom: 10px; }
+          .block-form-grid {
+            display: grid;
+            gap: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          }
+          .block-input-wrapper { width: 100%; }
+          .block-input-wrapper .form-group { margin-bottom: 10px; }
+        ")),
+        shiny::div(
+          class = "block-container",
+          shiny::div(
+            class = "block-form-grid",
+            shiny::div(
+              class = "block-input-wrapper",
+              blockr.dplyr::column_picker_ui(
+                shiny::NS(id, "key_picker"),
+                label = "Key columns",
+                choices = key_cols,
+                selected = key_cols
+              )
+            ),
+            shiny::div(
+              class = "block-input-wrapper",
+              blockr.dplyr::column_picker_ui(
+                shiny::NS(id, "measure_picker"),
+                label = "Measurement columns",
+                choices = measure_cols,
+                selected = measure_cols
+              )
+            ),
+            shiny::div(
+              class = "block-input-wrapper",
+              shiny::selectInput(
+                inputId = shiny::NS(id, "join_type"),
+                label = "Join type",
+                choices = c("Inner" = "inner", "Full" = "full"),
+                selected = join_type,
+                width = "100%"
+              )
+            ),
+            shiny::div(
+              class = "block-input-wrapper",
+              shiny::selectInput(
+                inputId = shiny::NS(id, "metric"),
+                label = "Diff metric",
+                choices = c(
+                  "Difference" = "diff",
+                  "Absolute difference" = "abs_diff",
+                  "Relative difference (%)" = "rel_diff",
+                  "Ratio" = "ratio",
+                  "Percent change" = "pct_change"
+                ),
+                selected = metric,
+                width = "100%"
+              )
+            )
+          )
         )
       )
     },
