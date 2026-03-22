@@ -479,13 +479,16 @@ table_preview_css <- function() {
     }
 
     .blockr-col-name {
-      display: block;
+      display: inline-block;
+      max-width: 100%;
       font-size: 14px;
       font-weight: var(--blockr-font-weight-medium, 500);
       color: var(--blockr-color-text-primary, #111827);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      user-select: text;
+      cursor: text;
     }
 
     .blockr-col-label {
@@ -729,6 +732,7 @@ table_sort_js <- function() {
     if (!window.blockrSortInit) {
       window.blockrSortInit = true;
       document.addEventListener('click', function(e) {
+        if (e.target.closest('.blockr-col-name')) return;
         var header = e.target.closest('.blockr-sortable');
         if (!header) return;
         e.preventDefault();
