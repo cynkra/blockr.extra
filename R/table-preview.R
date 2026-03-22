@@ -49,72 +49,47 @@ html_table_result <- function(result, block, session) {
     error = function(e) 5L
   )
 
+  html_table_render(result, session, page_size)
+}
+
+#' Render an Interactive HTML Table
+#'
+#' Stateless table renderer with server-side sorting and pagination.
+#' Sort and page state are managed in the browser via Shiny inputs —
+#' no session$userData or observers required.
+#'
+#' @param result The data frame result to display
+#' @param session Shiny session object
+#' @param page_size Number of rows per page (default 5)
+#'
+#' @return A shiny renderUI object containing the HTML table
+#'
+#' @keywords internal
+html_table_render <- function(result, session, page_size = 5L) {
   ns <- session$ns
-  key <- paste0("blockr_table_state_", ns(""))
-
-
-  # Initialize state once per namespace
-  if (is.null(session$userData[[key]])) {
-    sort_state <- shiny::reactiveVal(list(col = NULL, dir = "none"))
-    page_state <- shiny::reactiveVal(1L)
-
-    session$userData[[key]] <- list(
-      sort_state = sort_state,
-      page_state = page_state,
-      total_rows = 0L
-    )
-
-    # Observer for sort input from header clicks
-    shiny::observeEvent(session$input$blockr_table_sort, {
-      sort_input <- session$input$blockr_table_sort
-      if (!is.null(sort_input)) {
-        sort_state(list(col = sort_input$col, dir = sort_input$dir))
-        page_state(1L)  # Reset page when sort changes
-      }
-    })
-
-    # Observer for page navigation
-    shiny::observeEvent(session$input$blockr_table_page, {
-      direction <- session$input$blockr_table_page
-      current <- page_state()
-      total_rows <- session$userData[[key]]$total_rows
-      max_page <- max(1L, ceiling(total_rows / page_size))
-
-      if (direction == "prev" && current > 1L) {
-        page_state(current - 1L)
-      } else if (direction == "next" && current < max_page) {
-        page_state(current + 1L)
-      }
-    })
-  }
-
-  sort_state <- session$userData[[key]]$sort_state
-  page_state <- session$userData[[key]]$page_state
 
   shiny::renderUI({
     tryCatch({
-      current_sort <- sort_state()
-      page <- page_state()
-
-      # Update stored total_rows for observer to use
-      total_rows <- if (is.null(result)) 0L else nrow(result)
-      session$userData[[key]]$total_rows <- total_rows
-
-      # Clamp page if data changed
-      max_page <- max(1L, ceiling(total_rows / page_size))
-      if (page > max_page) {
-        page <- max_page
-        page_state(max_page)
+      sort_input <- session$input$blockr_table_sort
+      current_sort <- if (!is.null(sort_input)) {
+        list(col = sort_input$col, dir = sort_input$dir)
+      } else {
+        list(col = NULL, dir = "none")
       }
 
-      # Apply sorting
+      page <- session$input$blockr_table_page
+      page <- if (is.null(page)) 1L else as.integer(page)
+
+      total_rows <- if (is.null(result)) 0L else nrow(result)
+      max_page <- max(1L, ceiling(total_rows / page_size))
+      page <- min(max(1L, page), max_page)
+
       sorted_result <- apply_table_sort(
         result,
         current_sort$col,
         current_sort$dir
       )
 
-      # Slice data for current page
       start_row <- (page - 1L) * page_size + 1L
       end_row <- min(page * page_size, total_rows)
       dat <- if (total_rows > 0 && end_row >= start_row) {
@@ -349,6 +324,8 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
       class = "blockr-table-container",
       `data-sort-input` = sort_input_id,
       `data-page-input` = page_input_id,
+      `data-current-page` = page,
+      `data-max-page` = max_page,
       shiny::tags$div(
         class = "blockr-table-wrapper",
         shiny::tags$table(
@@ -761,6 +738,10 @@ table_sort_js <- function() {
                      currentDir === 'asc' ? 'desc' :
                      currentDir === 'desc' ? 'na' : 'none';
         Shiny.setInputValue(inputId, {col: col, dir: newDir}, {priority: 'event'});
+        var pageInputId = container.dataset.pageInput;
+        if (pageInputId) {
+          Shiny.setInputValue(pageInputId, 1, {priority: 'event'});
+        }
       });
     }
   "))
@@ -797,8 +778,12 @@ table_pagination_js <- function() {
           };
         }
 
+        var currentPage = parseInt(container.dataset.currentPage) || 1;
+        var maxPage = parseInt(container.dataset.maxPage) || 1;
         var direction = btn.dataset.direction;
-        Shiny.setInputValue(inputId, direction, {priority: 'event'});
+        var newPage = direction === 'prev' ? Math.max(1, currentPage - 1) :
+                      Math.min(maxPage, currentPage + 1);
+        Shiny.setInputValue(inputId, newPage, {priority: 'event'});
       });
     }
   "))
