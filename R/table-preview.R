@@ -1,14 +1,9 @@
-#' Apply Table Sort
-#'
-#' Sorts data using dplyr::arrange(). Works with both local data frames
-#' and remote database tables (dbplyr).
-#'
-#' @param data A data frame or tbl object
-#' @param sort_col Column name to sort by (NULL for no sorting)
-#' @param sort_dir Sort direction: "asc", "desc", or "na" (NA first, then asc)
-#'
-#' @return The sorted data
-#'
+# Server-side paginated HTML table preview.
+#
+# DUPLICATED: identical file lives in blockr.extra/R/table-preview.R and
+# blockr.dm/R/table-preview.R. Keep both in sync until this moves to a
+# shared package (blockr.core or blockr.ui).
+
 #' @keywords internal
 apply_table_sort <- function(data, sort_col, sort_dir) {
   if (is.null(sort_col) || is.null(sort_dir) || sort_dir == "none") {
@@ -26,109 +21,39 @@ apply_table_sort <- function(data, sort_col, sort_dir) {
   }
 }
 
-#' HTML Table Preview for Data Frames
-#'
-#' Replaces DT output with a lightweight HTML table for data blocks,
-#' transform blocks, and parser blocks.
-#'
-#' @param result The data frame result to display
-#' @param block The block object
-#' @param session Shiny session object
-#'
-#' @return A shiny renderUI object containing the HTML table
-#'
 #' @keywords internal
-html_table_result <- function(result, block, session) {
-
-  page_size <- tryCatch(
-    blockr.core::get_board_option_or_default(
-      "page_size",
-      blockr.core::board_options(block),
-      session
-    ),
-    error = function(e) 5L
-  )
-
-  html_table_render(result, session, page_size)
+col_type_label <- function(x) {
+  if (inherits(x, "POSIXct") || inherits(x, "POSIXlt")) {
+    "<dttm>"
+  } else if (inherits(x, "Date")) {
+    "<date>"
+  } else if (is.factor(x)) {
+    "<fct>"
+  } else if (is.logical(x)) {
+    "<lgl>"
+  } else if (is.integer(x)) {
+    "<int>"
+  } else if (is.numeric(x)) {
+    "<dbl>"
+  } else if (is.character(x)) {
+    "<chr>"
+  } else if (is.list(x)) {
+    "<list>"
+  } else {
+    paste0("<", class(x)[1], ">")
+  }
 }
 
-#' Render an Interactive HTML Table
-#'
-#' Stateless table renderer with server-side sorting and pagination.
-#' Sort and page state are managed in the browser via Shiny inputs —
-#' no session$userData or observers required.
-#'
-#' @param result The data frame result to display
-#' @param session Shiny session object
-#' @param page_size Number of rows per page (default 5)
-#'
-#' @return A shiny renderUI object containing the HTML table
-#'
 #' @keywords internal
-html_table_render <- function(result, session, page_size = 5L) {
-  ns <- session$ns
-
-  shiny::renderUI({
-    tryCatch({
-      sort_input <- session$input$blockr_table_sort
-      current_sort <- if (!is.null(sort_input)) {
-        list(col = sort_input$col, dir = sort_input$dir)
-      } else {
-        list(col = NULL, dir = "none")
-      }
-
-      page <- session$input$blockr_table_page
-      page <- if (is.null(page)) 1L else as.integer(page)
-
-      total_rows <- if (is.null(result)) 0L else nrow(result)
-      max_page <- max(1L, ceiling(total_rows / page_size))
-      page <- min(max(1L, page), max_page)
-
-      sorted_result <- apply_table_sort(
-        result,
-        current_sort$col,
-        current_sort$dir
-      )
-
-      start_row <- (page - 1L) * page_size + 1L
-      end_row <- min(page * page_size, total_rows)
-      dat <- if (total_rows > 0 && end_row >= start_row) {
-        as.data.frame(dplyr::slice(sorted_result, start_row:end_row))
-      } else {
-        as.data.frame(sorted_result)
-      }
-
-      build_html_table(
-        dat,
-        total_rows,
-        sort_state = current_sort,
-        ns = ns,
-        page = page,
-        page_size = page_size
-      )
-    }, error = function(e) {
-      shiny::tags$div(
-        class = "blockr-table-error",
-        style = "color: red; padding: 12px;",
-        paste("Error rendering table:", conditionMessage(e))
-      )
-    })
-  })
+format_column_inner <- function(x, max_chars = 50) {
+  if (is.character(x)) {
+    x
+  } else {
+    shaft <- pillar::pillar_shaft(x)
+    trimws(format(shaft, width = max_chars))
+  }
 }
 
-#' Build HTML Table
-#'
-#' Constructs the HTML table structure with type indicators and row numbers.
-#'
-#' @param dat Data frame to display (already subset)
-#' @param total_rows Total number of rows in original data
-#' @param sort_state List with col (column name) and dir ("asc", "desc", or "none")
-#' @param ns Shiny namespace function
-#' @param page Current page number (default 1)
-#' @param page_size Number of rows per page (default 5)
-#'
-#' @return A shiny tagList containing the table HTML
-#'
 #' @keywords internal
 build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
                              page = 1L, page_size = 5L) {
@@ -231,9 +156,6 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
       do.call(shiny::tags$span, label_args)
     }
 
-    # Compute min-width from header text length so columns aren't narrower
-
-    # than their header when data values are short
     name_width <- nchar(col_name) * 8 + 32
     label_width <- if (has_labels && nzchar(col_labels[j])) {
       min(nchar(col_labels[j]), 20) * 7 + 32
@@ -345,71 +267,6 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
   )
 }
 
-#' Column Type Label
-#'
-#' Returns tibble-style type labels for column types.
-#'
-#' @param x A vector
-#'
-#' @return A character string like "<chr>", "<int>", "<dbl>", etc.
-#'
-#' @keywords internal
-col_type_label <- function(x) {
-  if (inherits(x, "POSIXct") || inherits(x, "POSIXlt")) {
-    "<dttm>"
-  } else if (inherits(x, "Date")) {
-    "<date>"
-  } else if (is.factor(x)) {
-    "<fct>"
-  } else if (is.logical(x)) {
-    "<lgl>"
-  } else if (is.integer(x)) {
-    "<int>"
-  } else if (is.numeric(x)) {
-    "<dbl>"
-  } else if (is.character(x)) {
-    "<chr>"
-  } else if (is.list(x)) {
-    "<list>"
-  } else {
-    paste0("<", class(x)[1], ">")
-  }
-}
-
-#' Format Column
-#'
-#' Formats an entire column vector for display using pillar's formatting.
-#'
-#' @param x A vector (column from data frame)
-#' @param max_chars Maximum characters before truncation (default 50)
-#'
-#' @return A character vector of formatted values
-#'
-#' @keywords internal
-format_column <- function(x, max_chars = 50) {
-  old_opts <- options(cli.num_colors = 1)
-  on.exit(options(old_opts), add = TRUE)
-  format_column_inner(x, max_chars)
-}
-
-#' @rdname format_column
-#' @keywords internal
-format_column_inner <- function(x, max_chars = 50) {
-  if (is.character(x)) {
-    x
-  } else {
-    shaft <- pillar::pillar_shaft(x)
-    trimws(format(shaft, width = max_chars))
-  }
-}
-
-#' Table Preview CSS
-#'
-#' Returns inline CSS for table styling. Uses CSS variables from blockr.dock
-#' when available, with fallback values for standalone use.
-#'
-#' @return A shiny tags$style element
-#'
 #' @keywords internal
 table_preview_css <- function() {
   shiny::tags$style(shiny::HTML("
@@ -633,13 +490,6 @@ table_preview_css <- function() {
   "))
 }
 
-#' Table Sort JavaScript
-#'
-#' Returns JavaScript for handling column header clicks to toggle sort.
-#' Reads the input ID from the parent container's data-sort-input attribute.
-#'
-#' @return A shiny tags$script element
-#'
 #' @keywords internal
 table_sort_js <- function() {
   shiny::tags$script(shiny::HTML("
@@ -656,8 +506,6 @@ table_sort_js <- function() {
           if (!wrapper) return;
           var table = wrapper.querySelector('.blockr-table');
           if (!table || table.dataset.widthsLocked) return;
-
-          // Lock column widths to prevent layout shifts on sort/page
           var allThs = table.querySelectorAll('thead th');
           if (allThs.length === 0) return;
           var dataThs = table.querySelectorAll('thead th[data-column]');
@@ -665,9 +513,7 @@ table_sort_js <- function() {
             return th.dataset.column;
           }).join(',');
           var stored = window.blockrColumnWidths[key];
-
           if (stored && stored.colKey === colKey) {
-            // Apply stored widths from first render
             table.style.tableLayout = 'fixed';
             table.style.width = stored.totalWidth + 'px';
             allThs.forEach(function(th, i) {
@@ -675,7 +521,6 @@ table_sort_js <- function() {
             });
             table.dataset.widthsLocked = '1';
           } else {
-            // First render: capture widths after browser layout
             requestAnimationFrame(function() {
               var widths = Array.from(allThs).map(function(th) {
                 return th.offsetWidth;
@@ -687,8 +532,6 @@ table_sort_js <- function() {
               };
             });
           }
-
-          // Restore scroll position if saved
           var saved = window.blockrScrollRestore[key];
           if (saved) {
             if (saved.col) {
@@ -717,10 +560,7 @@ table_sort_js <- function() {
         var container = header.closest('.blockr-table-container');
         var inputId = container ? container.dataset.sortInput : null;
         if (!inputId) return;
-
         var col = header.dataset.column;
-
-        // Save clicked column's visual position before re-render
         var wrapper = container.querySelector('.blockr-table-wrapper');
         var output = container.closest('.shiny-html-output');
         if (wrapper && output) {
@@ -733,7 +573,6 @@ table_sort_js <- function() {
         var currentDir = header.classList.contains('blockr-sort-asc') ? 'asc' :
                          header.classList.contains('blockr-sort-desc') ? 'desc' :
                          header.classList.contains('blockr-sort-na') ? 'na' : 'none';
-        // Cycle: none -> asc -> desc -> na -> none
         var newDir = currentDir === 'none' ? 'asc' :
                      currentDir === 'asc' ? 'desc' :
                      currentDir === 'desc' ? 'na' : 'none';
@@ -747,13 +586,6 @@ table_sort_js <- function() {
   "))
 }
 
-#' Table Pagination JavaScript
-#'
-#' Returns JavaScript for handling pagination button clicks.
-#' Reads the input ID from the parent container's data-page-input attribute.
-#'
-#' @return A shiny tags$script element
-#'
 #' @keywords internal
 table_pagination_js <- function() {
   shiny::tags$script(shiny::HTML("
@@ -767,8 +599,6 @@ table_pagination_js <- function() {
         var container = btn.closest('.blockr-table-container');
         var inputId = container ? container.dataset.pageInput : null;
         if (!inputId) return;
-
-        // Save scroll position before re-render
         var wrapper = container.querySelector('.blockr-table-wrapper');
         var output = container.closest('.shiny-html-output');
         if (wrapper && output) {
@@ -777,7 +607,6 @@ table_pagination_js <- function() {
             col: null
           };
         }
-
         var currentPage = parseInt(container.dataset.currentPage) || 1;
         var maxPage = parseInt(container.dataset.maxPage) || 1;
         var direction = btn.dataset.direction;
@@ -789,13 +618,6 @@ table_pagination_js <- function() {
   "))
 }
 
-#' Table Label Tooltip JavaScript
-#'
-#' Returns JavaScript for showing full column labels on hover.
-#' Uses event delegation and position:fixed to escape overflow containers.
-#'
-#' @return A shiny tags$script element
-#'
 #' @keywords internal
 table_tooltip_js <- function() {
   shiny::tags$script(shiny::HTML("
@@ -822,47 +644,4 @@ table_tooltip_js <- function() {
       });
     }
   "))
-}
-
-
-# --- S3 method overrides (opt-in via option) ---
-
-#' Render block output with optional HTML table preview
-#' @noRd
-render_block_output_with_option <- function(x, result, session, original_method) {
-  if (getOption("blockr.html_table_preview", FALSE)) {
-    html_table_result(result, x, session)
-  } else if (!is.null(original_method)) {
-    original_method(x, result, session)
-  }
-}
-
-#' Render block UI with optional HTML table preview
-#' @noRd
-render_block_ui_with_option <- function(id, x, original_method, ...) {
-  if (getOption("blockr.html_table_preview", FALSE)) {
-    shiny::tagList(shiny::uiOutput(shiny::NS(id, "result")))
-  } else if (!is.null(original_method)) {
-    original_method(id, x, ...)
-  }
-}
-
-#' @export
-block_output.data_block <- function(x, result, session) {
-  render_block_output_with_option(x, result, session, get_original_block_output_data_block())
-}
-
-#' @export
-block_ui.data_block <- function(id, x, ...) {
-  render_block_ui_with_option(id, x, get_original_block_ui_data_block(), ...)
-}
-
-#' @export
-block_output.transform_block <- function(x, result, session) {
-  render_block_output_with_option(x, result, session, get_original_block_output_transform_block())
-}
-
-#' @export
-block_ui.transform_block <- function(id, x, ...) {
-  render_block_ui_with_option(id, x, get_original_block_ui_transform_block(), ...)
 }
