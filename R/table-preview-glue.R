@@ -59,6 +59,9 @@ html_table_render <- function(result, session, page_size = 5L) {
       max_page <- max(1L, ceiling(total_rows / page_size))
       page <- min(max(1L, page), max_page)
 
+      # Extract table label before sorting/slicing strips it
+      tbl_label <- attr(result, "label")
+
       sorted_result <- apply_table_sort(
         result,
         current_sort$col,
@@ -79,7 +82,8 @@ html_table_render <- function(result, session, page_size = 5L) {
         sort_state = current_sort,
         ns = ns,
         page = page,
-        page_size = page_size
+        page_size = page_size,
+        table_label = tbl_label
       )
     }, error = function(e) {
       shiny::tags$div(
