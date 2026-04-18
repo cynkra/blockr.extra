@@ -151,7 +151,7 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
         display_text
       )
       if (is_truncated) {
-        label_args[["data-full-label"]] <- col_labels[j]
+        label_args[["title"]] <- col_labels[j]
       }
       do.call(shiny::tags$span, label_args)
     }
@@ -236,7 +236,7 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
       display_text
     )
     if (is_truncated) {
-      label_args[["data-full-label"]] <- table_label
+      label_args[["title"]] <- table_label
     }
     table_label_tag <- do.call(shiny::tags$span, label_args)
   }
@@ -286,8 +286,7 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
     ),
     table_preview_css(),
     table_sort_js(),
-    table_pagination_js(),
-    table_tooltip_js()
+    table_pagination_js()
   )
 }
 
@@ -371,19 +370,6 @@ table_preview_css <- function() {
       text-overflow: ellipsis;
       max-width: 120px;
       margin-top: 1px;
-    }
-
-    .blockr-label-tooltip {
-      position: fixed;
-      background: #1f2937;
-      color: #fff;
-      font-size: 11px;
-      font-weight: 400;
-      padding: 4px 8px;
-      border-radius: 4px;
-      white-space: nowrap;
-      z-index: 9999;
-      pointer-events: none;
     }
 
     .blockr-type-row {
@@ -665,30 +651,3 @@ table_pagination_js <- function() {
   "))
 }
 
-#' @keywords internal
-table_tooltip_js <- function() {
-  shiny::tags$script(shiny::HTML("
-    if (!window.blockrTooltipInit) {
-      window.blockrTooltipInit = true;
-      var tip = null;
-      document.addEventListener('mouseover', function(e) {
-        var label = e.target.closest('[data-full-label]');
-        if (!label) return;
-        if (tip) tip.remove();
-        tip = document.createElement('div');
-        tip.className = 'blockr-label-tooltip';
-        tip.textContent = label.dataset.fullLabel;
-        document.body.appendChild(tip);
-        var rect = label.getBoundingClientRect();
-        tip.style.left = rect.left + 'px';
-        tip.style.top = (rect.bottom + 4) + 'px';
-      });
-      document.addEventListener('mouseout', function(e) {
-        var label = e.target.closest('[data-full-label]');
-        if (!label || !tip) return;
-        tip.remove();
-        tip = null;
-      });
-    }
-  "))
-}
