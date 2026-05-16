@@ -401,7 +401,7 @@ table_preview_css <- function() {
       max-width: 200px;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: pre;
     }
 
     .blockr-table .blockr-row-number {
@@ -567,16 +567,13 @@ table_sort_js <- function() {
           }
           var saved = window.blockrScrollRestore[key];
           if (saved) {
-            if (saved.col) {
-              var th = wrapper.querySelector('th[data-column=\"' + saved.col + '\"]');
-              if (th) {
-                wrapper.scrollLeft = th.offsetLeft - saved.visualOffset;
-              } else {
-                wrapper.scrollLeft = saved.scrollLeft;
-              }
-            } else {
-              wrapper.scrollLeft = saved.scrollLeft;
-            }
+            // Columns and their locked widths are stable across a sort or
+            // page change, so the absolute scrollLeft is exact. Re-assert it
+            // on the next frame so a post-render reflow can't clamp it to 0
+            // (which would snap the view back to the first column).
+            var doRestore = function() { wrapper.scrollLeft = saved.scrollLeft; };
+            doRestore();
+            requestAnimationFrame(doRestore);
             delete window.blockrScrollRestore[key];
           }
         });
@@ -598,9 +595,7 @@ table_sort_js <- function() {
         var output = container.closest('.shiny-html-output');
         if (wrapper && output) {
           window.blockrScrollRestore[output.id] = {
-            scrollLeft: wrapper.scrollLeft,
-            col: col,
-            visualOffset: header.offsetLeft - wrapper.scrollLeft
+            scrollLeft: wrapper.scrollLeft
           };
         }
         var currentDir = header.classList.contains('blockr-sort-asc') ? 'asc' :
@@ -636,8 +631,7 @@ table_pagination_js <- function() {
         var output = container.closest('.shiny-html-output');
         if (wrapper && output) {
           window.blockrScrollRestore[output.id] = {
-            scrollLeft: wrapper.scrollLeft,
-            col: null
+            scrollLeft: wrapper.scrollLeft
           };
         }
         var currentPage = parseInt(container.dataset.currentPage) || 1;

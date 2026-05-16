@@ -1,6 +1,6 @@
 Package: blockr.extra
 Title: Extra Experimental Blocks for blockr
-Version: 0.0.2
+Version: 0.0.3
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",
