@@ -538,7 +538,31 @@ table_sort_js <- function() {
           var wrapper = output.querySelector('.blockr-table-wrapper');
           if (!wrapper) return;
           var table = wrapper.querySelector('.blockr-table');
-          if (!table || table.dataset.widthsLocked) return;
+          if (!table) return;
+
+          // A single sort or page change makes Shiny re-render this output
+          // several times in a row (input flush + recalculating placeholder
+          // + final result); each replaces the table element and resets the
+          // horizontal scroll to 0. The renders can arrive in any order and
+          // any of them may reuse an already width-locked table, so we keep
+          // re-applying the saved scrollLeft on every render and only release
+          // it once the burst goes quiet (no further render for 1.5s). This
+          // is also robust to a slow server delaying the final render.
+          // Columns and their locked widths are identical before and after a
+          // sort/page change, so the absolute scrollLeft is exact.
+          var saved = window.blockrScrollRestore[key];
+          if (saved && saved.scrollLeft) {
+            if (saved.applied && Date.now() - saved.t > 1500) {
+              delete window.blockrScrollRestore[key];
+            } else {
+              void wrapper.scrollWidth; // flush pending layout
+              wrapper.scrollLeft = saved.scrollLeft;
+              saved.applied = true;
+              saved.t = Date.now();
+            }
+          }
+
+          if (table.dataset.widthsLocked) return;
           var allThs = table.querySelectorAll('thead th');
           if (allThs.length === 0) return;
           var dataThs = table.querySelectorAll('thead th[data-column]');
@@ -565,17 +589,6 @@ table_sort_js <- function() {
               };
             });
           }
-          var saved = window.blockrScrollRestore[key];
-          if (saved) {
-            // Columns and their locked widths are stable across a sort or
-            // page change, so the absolute scrollLeft is exact. Re-assert it
-            // on the next frame so a post-render reflow can't clamp it to 0
-            // (which would snap the view back to the first column).
-            var doRestore = function() { wrapper.scrollLeft = saved.scrollLeft; };
-            doRestore();
-            requestAnimationFrame(doRestore);
-            delete window.blockrScrollRestore[key];
-          }
         });
       }).observe(document.body, { childList: true, subtree: true });
     }
@@ -595,7 +608,8 @@ table_sort_js <- function() {
         var output = container.closest('.shiny-html-output');
         if (wrapper && output) {
           window.blockrScrollRestore[output.id] = {
-            scrollLeft: wrapper.scrollLeft
+            scrollLeft: wrapper.scrollLeft,
+            t: Date.now()
           };
         }
         var currentDir = header.classList.contains('blockr-sort-asc') ? 'asc' :
@@ -631,7 +645,8 @@ table_pagination_js <- function() {
         var output = container.closest('.shiny-html-output');
         if (wrapper && output) {
           window.blockrScrollRestore[output.id] = {
-            scrollLeft: wrapper.scrollLeft
+            scrollLeft: wrapper.scrollLeft,
+            t: Date.now()
           };
         }
         var currentPage = parseInt(container.dataset.currentPage) || 1;
