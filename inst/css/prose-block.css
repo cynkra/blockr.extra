@@ -1,0 +1,127 @@
+/* blockr.extra prose block */
+
+.blockr-prose {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.blockr-prose-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.blockr-prose-field-menu {
+  position: absolute;
+  z-index: 1060;
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+  max-height: 16rem;
+  overflow-y: auto;
+  min-width: 12rem;
+  background: var(--bs-body-bg, #fff);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.375rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  padding: 0.25rem;
+}
+
+.blockr-prose-field-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-family: var(--bs-font-monospace, monospace);
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.blockr-prose-field-item:hover {
+  background: var(--bs-tertiary-bg, #f1f3f5);
+}
+
+.blockr-prose-field-empty {
+  padding: 0.25rem 0.5rem;
+  color: var(--bs-secondary-color, #6c757d);
+  font-size: 0.85em;
+}
+
+.blockr-prose-editor {
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  min-height: 6rem;
+  background: var(--bs-body-bg, #fff);
+}
+
+.blockr-prose-editor .ProseMirror {
+  outline: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.blockr-prose-editor .ProseMirror:focus {
+  outline: none;
+}
+
+.blockr-prose-editor p {
+  margin: 0 0 0.5rem;
+}
+
+/* Glue reference chip */
+.blockr-glue-chip {
+  display: inline-block;
+  padding: 0.05em 0.4em;
+  margin: 0 0.05em;
+  border-radius: 0.5rem;
+  background: var(--bs-primary-bg-subtle, #cfe2ff);
+  color: var(--bs-primary-text-emphasis, #052c65);
+  border: 1px solid var(--bs-primary-border-subtle, #9ec5fe);
+  font-family: var(--bs-font-monospace, monospace);
+  font-size: 0.85em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.blockr-glue-chip:hover {
+  filter: brightness(0.97);
+}
+
+.blockr-prose-source {
+  font-size: 0.9em;
+}
+
+.blockr-prose-source > summary {
+  cursor: pointer;
+  color: var(--bs-secondary-color, #6c757d);
+  user-select: none;
+}
+
+.blockr-prose-source-ta {
+  margin-top: 0.4rem;
+  font-family: var(--bs-font-monospace, monospace);
+  font-size: 0.85em;
+}
+
+.blockr-prose-popover {
+  position: absolute;
+  z-index: 1070;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.35rem;
+  background: var(--bs-body-bg, #fff);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.375rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.blockr-prose-popover input {
+  min-width: 14rem;
+  font-family: var(--bs-font-monospace, monospace);
+}

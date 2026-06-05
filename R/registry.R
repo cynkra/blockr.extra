@@ -13,7 +13,8 @@ register_extra_blocks <- function() {
       "new_async_function_block",
       "new_broom_summary_block",
       "new_compare_block",
-      "new_search_block"
+      "new_search_block",
+      "new_prose_block"
     ),
     name = c(
       "Function block",
@@ -22,7 +23,8 @@ register_extra_blocks <- function() {
       "Async Function block",
       "Broom Summary",
       "Compare",
-      "Search"
+      "Search",
+      "Prose"
     ),
     description = c(
       "Transform data with a custom R function. UI auto-generated from function arguments.",
@@ -31,9 +33,11 @@ register_extra_blocks <- function() {
       "Transform data with a custom R function asynchronously. Requires mirai daemons. Click Run to execute.",
       "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
       "Compare two data frames on key columns and compute diff metrics on measurement columns.",
-      "Filter rows by case-insensitive substring match across all columns."
+      "Filter rows by case-insensitive substring match across all columns.",
+      "Rich-text (WYSIWYG) markdown notes with glue data interpolation."
     ),
     category = c(
+      "transform",
       "transform",
       "transform",
       "transform",
@@ -49,7 +53,8 @@ register_extra_blocks <- function() {
       "hourglass-split",
       "clipboard-data",
       "arrow-left-right",
-      "search"
+      "search",
+      "card-text"
     ),
     arguments = list(
       # new_function_block:
@@ -61,11 +66,11 @@ register_extra_blocks <- function() {
           fn = "function(data, column = c('Sepal.Length' = 'Sepal.Length', 'Sepal.Width' = 'Sepal.Width'), n = 6L, descending = FALSE) { data <- data[order(data[[column]], decreasing = descending), ]; utils::head(data, n) }"
         ),
         prompt = paste(
-          "Write the value of fn as a SINGLE-LINE R function string (no newlines inside the string — this is critical because the value is embedded in JSON).",
+          "Write the value of fn as a SINGLE-LINE R function string (no newlines inside the string -- this is critical because the value is embedded in JSON).",
           "The function MUST have 'data' as its first argument.",
-          "ALL additional parameters MUST have default values — a parameter without a default will crash the app.",
+          "ALL additional parameters MUST have default values -- a parameter without a default will crash the app.",
           "Default value types map to UI widgets: character vector with multiple elements c('A' = 'a', 'B' = 'b') -> dropdown; single numeric -> number input; single logical -> checkbox; single character string -> text input.",
-          "For dropdown parameters, ALWAYS use a named c() vector where names are display labels and values are the actual values, e.g. column = c('Sepal.Length' = 'Sepal.Length', 'Petal.Width' = 'Petal.Width'). An unnamed c() vector will NOT create a dropdown — it will break the function.",
+          "For dropdown parameters, ALWAYS use a named c() vector where names are display labels and values are the actual values, e.g. column = c('Sepal.Length' = 'Sepal.Length', 'Petal.Width' = 'Petal.Width'). An unnamed c() vector will NOT create a dropdown -- it will break the function.",
           "Use column names from the actual data provided for any column-selection parameters.",
           "Wrap the entire function body in curly braces on one line, separating statements with semicolons.",
           "\n\nR coding rules: always use the base pipe |> (never %>%).",
@@ -111,7 +116,28 @@ register_extra_blocks <- function() {
       # new_compare_block:
       NULL,
       # new_search_block:
-      NULL
+      NULL,
+      # new_prose_block:
+      structure(
+        c(
+          text = paste(
+            "Markdown string for the note. May embed glue references in braces",
+            "that are evaluated by glue::glue() against the input data, which is",
+            "bound by its input name (e.g. `data`). Use `{nrow(data)}`,",
+            "`{data$colname}`, `{round(mean(data$mpg), 1)}` -- a bare `{colname}`",
+            "does NOT resolve. GFM markdown supported."
+          )
+        ),
+        examples = list(
+          text = "## Summary\n\nThe dataset has **{nrow(data)}** rows."
+        ),
+        prompt = paste(
+          "Return GitHub-Flavored Markdown.",
+          "Glue references must reference the input by name (`data`), e.g.",
+          "{nrow(data)} or {data$Species}, never a bare column name.",
+          "Explore the data (names(data), str(data)) so references are valid."
+        )
+      )
     ),
     package = utils::packageName(),
     overwrite = TRUE
