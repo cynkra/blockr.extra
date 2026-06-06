@@ -200,47 +200,22 @@ shiny::tagList(
         const chevron = document.querySelector('#%s .block-chevron');
         section.classList.toggle('expanded');
         chevron.classList.toggle('rotated');
+        %s
         ",
         advanced_id,
-        ns("advanced-toggle")
+        ns("advanced-toggle"),
+        code_editor_refresh_js(ns("fn_code"))
       ),
       shiny::tags$span(class = "block-chevron", "\u203A"),
       "Edit function"
     ),
 
-    # Advanced options (function editor)
+    # Advanced options (the shared Blockr.Code editor + its flush footer).
     shiny::div(
       id = advanced_id,
       shiny::div(
         style = "padding: 10px 0;",
-        shiny::div(
-          class = "function-editor-wrapper",
-          shinyAce::aceEditor(
-            outputId = ns("fn_code"),
-            value = fn_text,
-            mode = "r",
-            theme = "tomorrow",
-            height = "200px",
-            fontSize = 13,
-            showLineNumbers = TRUE,
-            tabSize = 2,
-            showPrintMargin = FALSE,
-            highlightActiveLine = TRUE
-          )
-        ),
-        shiny::div(
-          style = "margin-top: 10px;",
-          shiny::actionButton(
-            ns("submit_fn"),
-            "Apply Function",
-            class = "btn-primary btn-sm"
-          ),
-          shiny::span(
-            class = "text-muted",
-            style = "margin-left: 10px; font-size: 0.8rem;",
-            hint_text
-          )
-        )
+        code_editor_ui(ns, fn_text, label = NULL)
       )
     )
   )
@@ -382,11 +357,10 @@ setup_function_block_server <- function(
   r_error <- shiny::reactiveVal(NULL)
   r_version <- shiny::reactiveVal(0L)
 
-  # Reverse sync: reactiveVal -> Ace editor (for AI/external updates)
+  # Parse/validate on every change of the code text. The editor reverse-sync
+  # (pushing AI/external writes into the editor + the inline diff) is handled by
+  # setup_code_editor_server (blockr-code-set), not here.
   shiny::observeEvent(r_fn_text(), {
-    if (!identical(r_fn_text(), input$fn_code)) {
-      shinyAce::updateAceEditor(session, "fn_code", value = r_fn_text())
-    }
     result <- tryCatch({
       parsed <- eval(parse(text = r_fn_text()))
       if (!is.function(parsed)) stop("Code must evaluate to a function")

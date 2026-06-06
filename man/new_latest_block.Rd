@@ -8,7 +8,7 @@ new_latest_block(last_active = NULL, ...)
 }
 \arguments{
 \item{last_active}{Character(1). Name of the input to treat as active on
-first load. Usually left \code{NULL} (falls back to the first input) — set
+first load. Usually left \code{NULL} (falls back to the first input) -- set
 automatically by the serialization layer when restoring a session.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_transform_block]{blockr.core::new_transform_block()}}.}

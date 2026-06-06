@@ -115,7 +115,7 @@ if (!is.na(p)) {
   }
 
   # Fallback: use confidence interval if available
-  # 95% CI excludes 0 → significant at 5% level
+  # 95% CI excludes 0 -> significant at 5% level
   if (!is.na(conf_low) && !is.na(conf_high)) {
     excludes_zero <- (conf_low > 0 && conf_high > 0) || (conf_low < 0 && conf_high < 0)
     if (excludes_zero) {

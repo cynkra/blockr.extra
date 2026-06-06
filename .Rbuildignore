@@ -1,0 +1,9 @@
+^dev$
+^node_modules$
+^srcjs$
+^package\.json$
+^package-lock\.json$
+^\.playwright-mcp$
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.claude$

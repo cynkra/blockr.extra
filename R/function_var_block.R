@@ -102,6 +102,17 @@ new_function_var_block <- function(
             strip_leading_dot = TRUE
           )
 
+          # The shared Blockr.Code editor (autocomplete over all inputs' cols).
+          setup_code_editor_server(
+            input, output, session, base,
+            cols = shiny::reactive({
+              nms <- names(...args)
+              unique(unlist(lapply(nms, function(n) {
+                tryCatch(names(...args[[n]]()), error = function(e) NULL)
+              })))
+            })
+          )
+
           # Get argument names for variadic inputs
           arg_names <- shiny::reactive(
             stats::setNames(names(...args), dot_args_names(...args))

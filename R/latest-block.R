@@ -22,7 +22,7 @@
 #' prevents the topo-sort mount order from being interpreted as a "click".
 #'
 #' @param last_active Character(1). Name of the input to treat as active on
-#'   first load. Usually left `NULL` (falls back to the first input) — set
+#'   first load. Usually left `NULL` (falls back to the first input) -- set
 #'   automatically by the serialization layer when restoring a session.
 #' @param ... Forwarded to [blockr.core::new_transform_block()].
 #'
@@ -60,7 +60,7 @@ new_latest_block <- function(last_active = NULL, ...) {
         # blockr wires `...args` lazily: at mount time `names(...args)` is
         # empty, and keys are added one per upstream link as those blocks
         # emit their first result. So we can't install per-key observers in
-        # the moduleServer body — we sync the observer set from within a
+        # the moduleServer body -- we sync the observer set from within a
         # tracker on `names(...args)` that re-runs whenever a new key
         # appears. Each observer uses ignoreInit = TRUE so the topo-sort
         # mount reads don't count as user clicks; the first firing sets

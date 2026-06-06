@@ -1,6 +1,6 @@
 Package: blockr.extra
 Title: Extra Experimental Blocks for blockr
-Version: 0.0.3
+Version: 0.0.7
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",
@@ -19,12 +19,16 @@ Imports:
     bslib,
     dplyr,
     evaluate,
+    glue,
+    htmltools,
     mirai,
     pillar,
     shiny,
     shinyAce,
     shinyjs,
+    stats,
     stringr,
+    utils,
     DT,
     gt
 Suggests:

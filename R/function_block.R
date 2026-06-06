@@ -65,6 +65,14 @@ new_function_block <- function(
             error_message = "Function must have 'data' as its first argument"
           )
 
+          # The shared Blockr.Code editor: AI-diff, live run, dirty footer.
+          setup_code_editor_server(
+            input, output, session, base,
+            cols = shiny::reactive(
+              tryCatch(names(data()), error = function(e) character())
+            )
+          )
+
           # Build expression
           list(
             expr = shiny::reactive({

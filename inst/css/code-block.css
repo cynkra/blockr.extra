@@ -1,0 +1,90 @@
+/* Code block — the CodeMirror editor shown inline on the card.
+ * Hand-rolled to the blockr design system (blockr.docs/design-system): no
+ * framework classes, --blockr-* tokens with literal fallbacks so it renders
+ * standalone. */
+
+.blockr-code-block { width: 100%; margin-bottom: 10px; }
+
+.blockr-code-label {
+  display: block;
+  font-weight: 500;
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-color-text-secondary, #6b7280);
+  margin-bottom: 6px;
+}
+
+/* Bordered frame holding the editor + the flush footer. */
+.blockr-code-frame {
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* The CodeMirror mount. */
+.blockr-code .cm-editor { height: 220px; }
+.blockr-code .cm-editor.cm-focused { outline: none; }
+.blockr-code .cm-scroller {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* Align the inline hunk (CodeMirror-merge) buttons to the design-system form:
+ * 4px radius, page font, sm size. Their solid green/red fills are kept — that's
+ * the diff convention the footer Accept/Reject mirror. */
+.blockr-code .cm-chunkButtons button {
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  padding: 1px 8px;
+}
+
+/* Flush footer bar (review controls OR Run), attached to the editor's bottom. */
+.blockr-code-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--blockr-color-border, #e5e7eb);
+  background: var(--blockr-grey-50, #f9fafb);
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+}
+.blockr-code-footer__label { color: var(--blockr-color-text-secondary, #6b7280); }
+.blockr-code-footer__actions { display: flex; gap: 6px; }
+
+/* Footer buttons — hand-rolled, no framework. Scoped under .blockr-code-footer
+ * so they win over any ambient .btn rules. Accept/Reject match the inline hunk
+ * buttons (solid green/red); Run uses the design-system tinted-primary confirm. */
+.blockr-code-footer .blockr-code-btn {
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 4px;
+  font: inherit;
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  font-weight: 500;
+  line-height: 24px;
+  cursor: pointer;
+  transition: background 0.15s ease, filter 0.15s ease;
+}
+.blockr-code-footer .blockr-code-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.blockr-code-footer .blockr-code-btn--accept { background: #2a2; color: #fff; }
+.blockr-code-footer .blockr-code-btn--accept:hover { filter: brightness(1.07); }
+.blockr-code-footer .blockr-code-btn--reject { background: #d43; color: #fff; }
+.blockr-code-footer .blockr-code-btn--reject:hover { filter: brightness(1.07); }
+.blockr-code-footer .blockr-code-btn--run {
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--blockr-color-primary, #2563eb);
+}
+.blockr-code-footer .blockr-code-btn--run:hover { background: rgba(37, 99, 235, 0.15); }
+
+.function-block-params {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 8px;
+}
