@@ -73,13 +73,19 @@
  * buttons (solid green/red); Run uses the design-system tinted-primary confirm. */
 .blockr-code-footer .blockr-code-btn {
   height: 24px;
+  box-sizing: border-box;
+  /* Flex-center the label so the 1px border doesn't push the text off-centre
+   * (was sitting slightly high). */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0 10px;
   border: none;
   border-radius: 4px;
   font: inherit;
   font-size: var(--blockr-font-size-sm, 0.8125rem);
   font-weight: normal;
-  line-height: 24px;
+  line-height: 1;
   cursor: pointer;
   transition: background 0.15s ease, filter 0.15s ease;
 }
@@ -98,16 +104,18 @@
   background: #fdecec; color: #b91c1c; border: 1px solid #f5c6c6;
 }
 .blockr-code-footer .blockr-code-btn--reject:hover { background: #fbdcdc; }
+/* Run as the same two-tone badge, in blue. */
 .blockr-code-footer .blockr-code-btn--run {
-  background: rgba(37, 99, 235, 0.08);
-  color: var(--blockr-color-primary, #2563eb);
+  background: #eaf1fd; color: var(--blockr-color-primary, #2563eb);
+  border: 1px solid #c3d6fb;
 }
-.blockr-code-footer .blockr-code-btn--run:hover { background: rgba(37, 99, 235, 0.15); }
+.blockr-code-footer .blockr-code-btn--run:hover { background: #dce8fc; }
 /* Disabled Run = pending edit has a syntax error: can't be run. */
 .blockr-code-footer .blockr-code-btn--run:disabled,
 .blockr-code-footer .blockr-code-btn--run[disabled] {
   background: var(--blockr-grey-200, #f1f3f5);
   color: var(--blockr-grey-400, #adb5bd);
+  border-color: var(--blockr-grey-300, #dee2e6);
   cursor: not-allowed;
 }
 /* Red footer label for a syntax error in the pending edit. */
