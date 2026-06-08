@@ -34,7 +34,12 @@
  * the diff convention the footer Accept/Reject mirror. */
 .blockr-code .cm-chunkButtons button {
   border-radius: 4px;
-  font-family: inherit;
+  /* These buttons live INSIDE the CodeMirror editor, so `inherit` would pick up
+   * the editor's monospace; pin them to the page font instead (Bootstrap's
+   * body font; design-system default sans). */
+  font-family: var(--bs-body-font-family,
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-weight: normal;
   font-size: var(--blockr-font-size-sm, 0.8125rem);
   padding: 1px 8px;
 }
@@ -73,7 +78,7 @@
   border-radius: 4px;
   font: inherit;
   font-size: var(--blockr-font-size-sm, 0.8125rem);
-  font-weight: 500;
+  font-weight: normal;
   line-height: 24px;
   cursor: pointer;
   transition: background 0.15s ease, filter 0.15s ease;
