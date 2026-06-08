@@ -61,16 +61,25 @@ new_async_function_block <- function(
       shiny::moduleServer(
         id,
         function(input, output, session) {
-          # Setup common server infrastructure (params, editor, validation)
+          # Setup common server infrastructure (params, validation).
           base <- setup_function_block_server(
             input = input,
             output = output,
             session = session,
-            fn = fn,
             fn_text = fn_text,
             required_args = "data",
             skip_args = "data",
             error_message = "Function must have 'data' as its first argument"
+          )
+
+          # The shared Blockr.Code editor (AI-diff, dirty footer, run-on-commit).
+          # Editing applies the code to base$r_fn(); execution is still manual
+          # via the async Run button below.
+          setup_code_editor_server(
+            input, output, session, base,
+            cols = shiny::reactive(
+              tryCatch(names(data()), error = function(e) character())
+            )
           )
 
           # === ASYNC-SPECIFIC ===
@@ -188,23 +197,24 @@ new_async_function_block <- function(
 #' @return Shiny tagList
 #' @noRd
 async_function_block_ui <- function(ns, fn_text) {
-  advanced_id <- ns("advanced-options")
-  class_prefix <- "async-function-block"
-
   shiny::tagList(
-    shinyjs::useShinyjs(),
-    async_function_block_css(advanced_id, class_prefix),
+    async_function_block_css(),
 
     shiny::div(
-      class = paste0(class_prefix, "-container"),
+      class = "function-block-container",
 
-      # Dynamic parameter inputs
+      # Authoring surface: gear-toggled inline editor (pushes content below down).
+      # Same as the other function blocks; the difference is execution is manual
+      # via the Run button below (not auto on edit).
+      gear_editor_ui(ns, fn_text, label = "Function code"),
+
+      # Dynamic parameter inputs (the resting surface).
       shiny::div(
-        class = paste0(class_prefix, "-params"),
+        class = "function-block-params",
         shiny::uiOutput(ns("dynamic_params"))
       ),
 
-      # Run/Cancel buttons
+      # Run / Cancel buttons (async execution).
       shiny::div(
         class = "d-flex gap-2 mb-2",
         style = "margin-bottom: 10px;",
@@ -219,160 +229,34 @@ async_function_block_ui <- function(ns, fn_text) {
           class = "btn-outline-danger btn-sm",
           disabled = TRUE
         )
-      ),
-
-      # Error display
-      shiny::uiOutput(ns("error_display")),
-
-      # Advanced toggle
-      shiny::div(
-        class = "block-advanced-toggle text-muted",
-        id = ns("advanced-toggle"),
-        onclick = sprintf(
-          "
-          const section = document.getElementById('%s');
-          const chevron = document.querySelector('#%s .block-chevron');
-          section.classList.toggle('expanded');
-          chevron.classList.toggle('rotated');
-          ",
-          advanced_id,
-          ns("advanced-toggle")
-        ),
-        shiny::tags$span(class = "block-chevron", "\u203A"),
-        "Edit function"
-      ),
-
-      # Advanced options (function editor)
-      shiny::div(
-        id = advanced_id,
-        shiny::div(
-          style = "padding: 10px 0;",
-          shiny::div(
-            class = "function-editor-wrapper",
-            shinyAce::aceEditor(
-              outputId = ns("fn_code"),
-              value = fn_text,
-              mode = "r",
-              theme = "tomorrow",
-              height = "200px",
-              fontSize = 13,
-              showLineNumbers = TRUE,
-              tabSize = 2,
-              showPrintMargin = FALSE,
-              highlightActiveLine = TRUE
-            )
-          ),
-          shiny::div(
-            style = "margin-top: 10px;",
-            shiny::actionButton(
-              ns("submit_fn"),
-              "Apply Function",
-              class = "btn-primary btn-sm"
-            ),
-            shiny::span(
-              class = "text-muted",
-              style = "margin-left: 10px; font-size: 0.8rem;",
-              "Function must have 'data' as first argument"
-            )
-          )
-        )
       )
     )
   )
 }
 
 
-#' Create CSS for async function block
+#' Create CSS for async function block (the async status badges only; layout
+#' comes from the shared `.function-block-*` / gear styles in code-block.css).
 #'
-#' @param advanced_id Namespaced ID for advanced options div
-#' @param class_prefix Prefix for CSS classes
 #' @return HTML style tag
 #' @noRd
-async_function_block_css <- function(advanced_id, class_prefix = "async-function-block") {
-  shiny::tags$style(shiny::HTML(sprintf(
+async_function_block_css <- function() {
+  shiny::tags$style(shiny::HTML(
     "
-    .%s-container {
-      width: 100%%;
-      padding-bottom: 10px;
-    }
-    .%s-params {
-      display: grid;
-      gap: 15px;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      margin-bottom: 10px;
-    }
-    .%s-params .shiny-input-container {
-      width: 100%% !important;
-    }
-    .%s-params .form-group {
-      width: 100%%;
-      margin-bottom: 0;
-    }
-    .%s-params .form-control {
-      width: 100%%;
-    }
     .async-status-initial {
-      color: #6c757d;
-      font-size: 0.875rem;
-      padding: 10px;
-      background: #f8f9fa;
-      border-radius: 4px;
+      color: #6c757d; font-size: 0.875rem; padding: 10px;
+      background: #f8f9fa; border-radius: 4px;
     }
     .async-status-running {
-      color: #0d6efd;
-      font-size: 0.875rem;
-      padding: 10px;
-      background: #e7f1ff;
-      border-radius: 4px;
+      color: #0d6efd; font-size: 0.875rem; padding: 10px;
+      background: #e7f1ff; border-radius: 4px;
     }
     .async-status-error {
-      color: #dc3545;
-      font-size: 0.875rem;
-      padding: 10px;
-      background: #f8d7da;
-      border-radius: 4px;
+      color: #dc3545; font-size: 0.875rem; padding: 10px;
+      background: #f8d7da; border-radius: 4px;
     }
-    #%s {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.3s ease-out;
-    }
-    #%s.expanded {
-      max-height: 800px;
-      overflow: visible;
-      transition: max-height 0.5s ease-in;
-    }
-    .block-advanced-toggle {
-      cursor: pointer;
-      user-select: none;
-      padding: 8px 0;
-      margin-bottom: 0;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.8125rem;
-    }
-    .block-chevron {
-      transition: transform 0.2s;
-      display: inline-block;
-      font-size: 14px;
-      font-weight: bold;
-    }
-    .block-chevron.rotated {
-      transform: rotate(90deg);
-    }
-    .function-editor-wrapper {
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
-      margin-top: 10px;
-    }
-    .function-editor-wrapper .shiny-ace {
-      border: none;
-    }
-    ",
-    class_prefix, class_prefix, class_prefix, class_prefix, class_prefix,
-    advanced_id, advanced_id
-  )))
+    "
+  ))
 }
 
 
