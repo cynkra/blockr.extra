@@ -165,10 +165,10 @@ new_async_function_block <- function(
 
           list(
             expr = result,
+            # `fn` must be the reactiveVal itself (not a reactive wrapper) so
+            # external_ctrl="fn" / the per-block AI can write to it.
             state = list(
-              fn = shiny::reactive({
-                base$r_fn_text()
-              })
+              fn = base$r_fn_text
             )
           )
         }
@@ -183,6 +183,9 @@ new_async_function_block <- function(
     },
     class = "async_function_block",
     allow_empty_state = TRUE,
+    # Now that the editor is the shared Blockr.Code surface, the per-block AI
+    # (blockr.ai) can author `fn` here too, landing as an inline diff.
+    external_ctrl = "fn",
     ...
   )
 }
