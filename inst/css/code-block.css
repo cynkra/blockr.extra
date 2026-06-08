@@ -38,6 +38,16 @@
   font-size: var(--blockr-font-size-sm, 0.8125rem);
   padding: 1px 8px;
 }
+/* Light two-tone Accept/Reject (same as the footer). !important to beat the
+ * solid #2a2/#d43 from CodeMirror-merge's runtime-injected theme. */
+.blockr-code .cm-chunkButtons button[name="accept"] {
+  background: #e9f9ef !important; color: #15803d !important;
+  border: 1px solid #b7ebcb !important;
+}
+.blockr-code .cm-chunkButtons button[name="reject"] {
+  background: #fdecec !important; color: #b91c1c !important;
+  border: 1px solid #f5c6c6 !important;
+}
 
 /* Flush footer bar (review controls OR Run), attached to the editor's bottom. */
 .blockr-code-footer {
@@ -72,10 +82,17 @@
   outline: none;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
-.blockr-code-footer .blockr-code-btn--accept { background: #2a2; color: #fff; }
-.blockr-code-footer .blockr-code-btn--accept:hover { filter: brightness(1.07); }
-.blockr-code-footer .blockr-code-btn--reject { background: #d43; color: #fff; }
-.blockr-code-footer .blockr-code-btn--reject:hover { filter: brightness(1.07); }
+/* Accept / Reject as light two-tone badges (matches blockr-dock's
+ * `.badge-two-tone`: light tint + same-hue text + subtle border), font
+ * inherited from the page. */
+.blockr-code-footer .blockr-code-btn--accept {
+  background: #e9f9ef; color: #15803d; border: 1px solid #b7ebcb;
+}
+.blockr-code-footer .blockr-code-btn--accept:hover { background: #d6f5e1; }
+.blockr-code-footer .blockr-code-btn--reject {
+  background: #fdecec; color: #b91c1c; border: 1px solid #f5c6c6;
+}
+.blockr-code-footer .blockr-code-btn--reject:hover { background: #fbdcdc; }
 .blockr-code-footer .blockr-code-btn--run {
   background: rgba(37, 99, 235, 0.08);
   color: var(--blockr-color-primary, #2563eb);
