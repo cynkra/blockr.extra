@@ -317,10 +317,8 @@ output$dynamic_params <- shiny::renderUI({
   args <- args[!names(args) %in% skip_args]
 
   if (length(args) == 0) {
-    return(shiny::div(
-      class = "text-muted",
-      "No parameters to configure"
-    ))
+    # No params: render nothing (stay blank) rather than a placeholder note.
+    return(NULL)
   }
 
   ui_elements <- lapply(names(args), function(arg_name) {
