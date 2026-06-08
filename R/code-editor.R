@@ -234,6 +234,69 @@ code_editor_ui <- function(ns, fn_text, label = "Function code") {
 }
 
 
+#' The gear icon (same path as `Blockr.icons.gear`), `fill="currentColor"`.
+#' @noRd
+gear_svg <- function() {
+  paste0(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" ',
+    'fill="currentColor" viewBox="0 0 16 16">',
+    '<path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 ',
+    '1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82',
+    '.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 ',
+    '.872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 ',
+    '2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31',
+    '.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-',
+    '.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-',
+    '1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872zM8 10.93a2.929 ',
+    '2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/></svg>'
+  )
+}
+
+
+#' Gear-toggled inline editor section (the authoring surface behind the gear).
+#'
+#' The standard ecosystem gear button toggles an inline `.blockr-gear-section`
+#' holding the editor (and any `top` UI above it — e.g. a template picker).
+#' Opening expands it in normal flow and pushes the content below it *down*
+#' (not a popover overlay); the gear stays `.blockr-gear-active` (coloured)
+#' while open. Styling is self-contained in code-block.css.
+#'
+#' @param ns Namespace function.
+#' @param fn_text Initial function code.
+#' @param top Optional UI rendered above the editor inside the section.
+#' @param label Editor field label.
+#' @return A Shiny tag.
+#' @noRd
+gear_editor_ui <- function(ns, fn_text, top = NULL, label = "Function code") {
+  sec_id <- ns("fn-editor")
+  btn_id <- ns("fn-gear-btn")
+  shiny::div(
+    class = "blockr-gear-editor",
+    shiny::div(
+      class = "blockr-gear-header",
+      shiny::tags$button(
+        id = btn_id,
+        type = "button",
+        class = "blockr-gear-btn",
+        title = "Edit function",
+        onclick = sprintf(
+          "(function(){var s=document.getElementById('%s');var b=document.getElementById('%s');var open=s.style.display!=='none';s.style.display=open?'none':'block';b.classList.toggle('blockr-gear-active',!open);if(!open){%s}})();",
+          sec_id, btn_id, code_editor_refresh_js(ns("fn_code"))
+        ),
+        htmltools::HTML(gear_svg())
+      )
+    ),
+    shiny::div(
+      id = sec_id,
+      class = "blockr-gear-section",
+      style = "display: none;",
+      top,
+      code_editor_ui(ns, fn_text, label = label)
+    )
+  )
+}
+
+
 #' A flush footer bar: a left status label and right-aligned actions.
 #' @noRd
 code_block_footer <- function(label, ...) {
