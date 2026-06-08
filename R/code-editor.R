@@ -12,6 +12,26 @@
 NULL
 
 
+#' Return the R parse-error message for a code string, or NULL if it parses.
+#'
+#' Used to gate the editor's Run button: only syntactically valid code may be
+#' committed/run, so runtime errors (not syntax errors) are what reach the
+#' normal blockr evaluation system.
+#'
+#' @param code Character string of R code.
+#' @return `NULL` if `code` parses, otherwise the condition message (string).
+#' @noRd
+parse_error <- function(code) {
+  if (is.null(code) || !nzchar(trimws(code))) {
+    return(NULL)
+  }
+  tryCatch({
+    parse(text = code)
+    NULL
+  }, error = function(e) conditionMessage(e))
+}
+
+
 #' Wire the code editor's server logic onto a function-block `base`
 #'
 #' Adds the editor's reactive machinery: pushes column-name completions, opens
@@ -77,10 +97,16 @@ setup_code_editor_server <- function(input, output, session, base,
 
   # Run-now path (Ctrl-Enter, and reject-a-hunk auto-run): commit the editor's
   # current code so it executes immediately, without opening a diff. JS has
-  # already synced input$fn_code to the same value.
+  # already synced input$fn_code to the same value. Run is the *parse gate*:
+  # un-parseable code never commits (the footer below also disables the Run
+  # button for it), so only syntactically valid code ever reaches evaluation —
+  # runtime errors then surface through the normal blockr error system.
   shiny::observeEvent(input$fn_exec, {
     code <- input$fn_exec
     if (is.null(code) || !nzchar(trimws(code))) {
+      return()
+    }
+    if (!is.null(parse_error(code))) {
       return()
     }
     r_internal(TRUE)
@@ -138,13 +164,33 @@ setup_code_editor_server <- function(input, output, session, base,
       if (is.null(ed) || identical(trimws(ed), trimws(base$r_fn_text()))) {
         return(NULL)
       }
-      code_block_footer(
-        "Pending edits",
-        shiny::actionButton(ns("submit_fn"), "Run",
-                            class = "blockr-code-btn blockr-code-btn--run")
-      )
+      perr <- parse_error(ed)
+      if (!is.null(perr)) {
+        # Syntax error in the pending edit: running it makes no sense, so the
+        # Run button is disabled and the footer turns red with the message.
+        # Only a parse error is shown here — runtime errors go through the
+        # normal evaluation system, not this footer.
+        code_block_footer(
+          shiny::span(class = "blockr-code-syntax-msg", "Syntax error"),
+          shiny::actionButton(ns("submit_fn"), "Run",
+                              class = "blockr-code-btn blockr-code-btn--run",
+                              disabled = TRUE)
+        )
+      } else {
+        code_block_footer(
+          "Pending edits",
+          shiny::actionButton(ns("submit_fn"), "Run",
+                              class = "blockr-code-btn blockr-code-btn--run")
+        )
+      }
     }
   })
+
+  # The footer lives inside the gear popover, which starts `display:none`; Shiny
+  # would otherwise suspend it and a JS-driven open wouldn't resume it (so the
+  # dirty/Run + syntax-error footer never appeared). Keep it live regardless —
+  # it's hidden with its parent when the gear is closed anyway.
+  shiny::outputOptions(output, "footer_ui", suspendWhenHidden = FALSE)
 
   invisible(NULL)
 }

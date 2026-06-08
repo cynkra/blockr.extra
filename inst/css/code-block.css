@@ -81,6 +81,18 @@
   color: var(--blockr-color-primary, #2563eb);
 }
 .blockr-code-footer .blockr-code-btn--run:hover { background: rgba(37, 99, 235, 0.15); }
+/* Disabled Run = pending edit has a syntax error: can't be run. */
+.blockr-code-footer .blockr-code-btn--run:disabled,
+.blockr-code-footer .blockr-code-btn--run[disabled] {
+  background: var(--blockr-grey-200, #f1f3f5);
+  color: var(--blockr-grey-400, #adb5bd);
+  cursor: not-allowed;
+}
+/* Red footer label for a syntax error in the pending edit. */
+.blockr-code-footer .blockr-code-syntax-msg {
+  color: var(--blockr-color-danger, #d6336c);
+  font-weight: 600;
+}
 
 .function-block-params {
   display: grid;
