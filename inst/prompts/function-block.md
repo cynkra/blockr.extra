@@ -14,15 +14,24 @@ the block's input (the upstream result); the function returns the block's output
   other object → its printed text.
 - **R style**: use the base pipe `|>` (never `%>%`); namespace-prefix every
   non-base/stats call (`dplyr::filter()`, `stringr::str_detect()`).
-- **Serialization**: `fn` is embedded as a JSON string, so escape newlines.
-  Multi-line bodies are fine; for a short function, a single line with `;`
-  between statements is also fine.
+- **Formatting**: write **readable, multi-line code with indentation** — it is
+  shown to the user in a code editor. Put each statement (and each function
+  argument, when there are several) on its own line; do NOT cram the body onto a
+  single line with `;`. Real newlines are fine and expected.
 
 ## Parameters → interactive UI controls
 
+**Adding a function argument is THE way to give the user a control.** When the
+request is to "expose", "let the user choose/pick/select/change", "make X
+selectable", "add a dropdown/filter/option for X", you do it by adding an
+argument after `data` -- NOT by looking for some library- or domain-specific
+selector/filter API. There is no other mechanism: a control exists if and only
+if there is a function parameter for it.
+
 Each argument after `data` becomes a control in the block's gear panel, and **its
 default value decides the control type**. Whatever the user selects is passed
-into your function under that name.
+into your function under that name, and you use it in the body (e.g.
+`dplyr::filter(data, Species %in% chosen)` or a composer `levels = chosen`).
 
 | Default you write | Control rendered | Pre-selected | Your arg receives |
 |---|---|---|---|
@@ -41,12 +50,13 @@ your code receives. For column- or value-pickers, populate the choices with the
 ACTUAL values from the data (`sort(unique(data$col))`), not just the few visible
 in the preview.
 
-Example:
+Example (note `sort_by = c(...)` is a single-select, `keep = list(...)` is a
+multi-select):
 
     function(data,
-             column = c("Sepal.Length" = "Sepal.Length", "Sepal.Width" = "Sepal.Width"),
-             n = 6L,
-             descending = FALSE) {
-      data <- data[order(data[[column]], decreasing = descending), ]
+             sort_by = c("Sepal.Length" = "Sepal.Length", "Sepal.Width" = "Sepal.Width"),
+             keep = list("Sepal.Length" = "Sepal.Length", "Species" = "Species"),
+             n = 6L) {
+      data <- data[order(data[[sort_by]]), unlist(keep), drop = FALSE]
       utils::head(data, n)
     }

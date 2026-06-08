@@ -53,7 +53,19 @@ register_extra_blocks <- function() {
           fn = "A string of R code that evaluates to a function. The function must have 'data' as its first argument (the input data frame). Additional arguments with defaults become UI widgets."
         ),
         examples = list(
-          fn = "function(data, column = c('Sepal.Length' = 'Sepal.Length', 'Sepal.Width' = 'Sepal.Width'), n = 6L, descending = FALSE) { data <- data[order(data[[column]], decreasing = descending), ]; utils::head(data, n) }"
+          # MULTI-LINE and indented (anchors readable output, not one-liners) and
+          # demonstrates BOTH a c() single-select (sort_by) AND a list()
+          # multi-select (keep) so the model has the multi-select pattern to copy.
+          fn = paste(
+            "function(data,",
+            "         sort_by = c('Sepal.Length' = 'Sepal.Length', 'Sepal.Width' = 'Sepal.Width'),",
+            "         keep = list('Sepal.Length' = 'Sepal.Length', 'Species' = 'Species'),",
+            "         n = 6L) {",
+            "  data <- data[order(data[[sort_by]]), unlist(keep), drop = FALSE]",
+            "  utils::head(data, n)",
+            "}",
+            sep = "\n"
+          )
         ),
         # Authored once in inst/prompts/function-block.md; see function_block_prompt().
         prompt = tryCatch(
