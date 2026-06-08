@@ -55,20 +55,14 @@ register_extra_blocks <- function() {
         examples = list(
           fn = "function(data, column = c('Sepal.Length' = 'Sepal.Length', 'Sepal.Width' = 'Sepal.Width'), n = 6L, descending = FALSE) { data <- data[order(data[[column]], decreasing = descending), ]; utils::head(data, n) }"
         ),
-        prompt = paste(
-          "Write the value of fn as a SINGLE-LINE R function string (no newlines inside the string -- this is critical because the value is embedded in JSON).",
-          "The function MUST have 'data' as its first argument.",
-          "ALL additional parameters MUST have default values -- a parameter without a default will crash the app.",
-          "Default value types map to UI widgets: character vector with multiple elements c('A' = 'a', 'B' = 'b') -> dropdown; single numeric -> number input; single logical -> checkbox; single character string -> text input.",
-          "For dropdown parameters, ALWAYS use a named c() vector where names are display labels and values are the actual values, e.g. column = c('Sepal.Length' = 'Sepal.Length', 'Petal.Width' = 'Petal.Width'). An unnamed c() vector will NOT create a dropdown -- it will break the function.",
-          "Use column names from the actual data provided for any column-selection parameters.",
-          "Wrap the entire function body in curly braces on one line, separating statements with semicolons.",
-          "\n\nR coding rules: always use the base pipe |> (never %>%).",
-          "Namespace-prefix all functions except base and stats (e.g. dplyr::filter(), stringr::str_detect()).",
-          "\n\nData exploration: explore the data structure (e.g. str(data), names(data)) to write a function",
-          "that correctly references available columns and handles their data types.",
-          "When creating dropdown parameters, explore unique values (e.g. unique(data$col) or sort(unique(data$col)))",
-          "so you can populate the c() vector with ALL actual values from the data, not just the ones visible in the preview."
+        # Authored once in inst/prompts/function-block.md; see function_block_prompt().
+        prompt = tryCatch(
+          function_block_prompt(),
+          error = function(e) paste(
+            "Write `fn` as `function(data, ...)`; every extra argument needs a",
+            "default whose type picks the UI control (list() -> multi-select,",
+            "c() -> single-select). Use base pipe |> and namespace-prefix calls."
+          )
         )
       ),
       # new_function_var_block:
