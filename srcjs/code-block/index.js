@@ -26,7 +26,7 @@ import {
   EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { StreamLanguage, syntaxHighlighting, defaultHighlightStyle, indentUnit } from "@codemirror/language";
+import { StreamLanguage, syntaxHighlighting, defaultHighlightStyle, indentUnit, indentService, getIndentUnit } from "@codemirror/language";
 import { r } from "@codemirror/legacy-modes/mode/r";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
@@ -36,6 +36,43 @@ import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
   if (!window.Shiny) return;
 
   const DEBOUNCE_MS = 250;
+
+  // Plain block indentation. Each unclosed `(`, `[` or `{` adds exactly
+  // one indent unit (2 spaces) regardless of where the bracket sits on
+  // its line. This replaces the legacy R mode's "align continuation
+  // lines to the column just after the bracket" behaviour, which pushed
+  // the body of `function(...) { expr` far to the right. CodeMirror tries
+  // every indentService before its syntax-tree fallback, so returning a
+  // number here fully overrides the legacy mode's indent.
+  const blockIndent = indentService.of((context, pos) => {
+    const unit = getIndentUnit(context.state);
+    // `lineAt(pos, -1)` returns only `{text, from}` (no `.to`) when a line
+    // break is simulated — i.e. the Enter case — so derive the end from
+    // the text length. Using `.to` here counted brackets past the cursor
+    // (e.g. a closing `}` below), cancelling the open brace to depth 0.
+    const prev = context.lineAt(pos, -1);
+    const upto = context.state.sliceDoc(0, prev.from + prev.text.length);
+    let depth = 0, inStr = null;
+    for (let i = 0; i < upto.length; i++) {
+      const c = upto[i];
+      if (inStr) {
+        if (c === "\\") { i++; continue; }
+        if (c === inStr) inStr = null;
+        continue;
+      }
+      if (c === '"' || c === "'" || c === "`") inStr = c;
+      else if (c === "#") {
+        const nl = upto.indexOf("\n", i);
+        if (nl === -1) break;
+        i = nl;
+      } else if (c === "{" || c === "(" || c === "[") depth++;
+      else if (c === "}" || c === ")" || c === "]") depth = Math.max(0, depth - 1);
+    }
+    // A line that itself starts with a closer dedents one level.
+    const after = (context.textAfterPos(pos) || "").replace(/^\s*/, "");
+    if (/^[}\])]/.test(after)) depth = Math.max(0, depth - 1);
+    return depth * unit;
+  });
 
   // Static completion vocabulary — kept small on purpose (the function body is
   // short and usually AI-written). Column names from the upstream data are
@@ -180,6 +217,7 @@ import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
         drawSelection(),
         highlightActiveLine(),
         indentUnit.of("  "),
+        blockIndent,
         syntaxHighlighting(defaultHighlightStyle),
         StreamLanguage.define(r),
         autocompletion({ override: [makeRSource(el)], activateOnTyping: true }),
