@@ -290,7 +290,14 @@ build_html_table <- function(dat, total_rows, sort_state = NULL, ns = NULL,
   )
 }
 
+#' Shared table-preview CSS
+#'
+#' The base table-preview styling. Exported because blockr.bi's html table block
+#' layers its own delta CSS on top of it (`blockr.extra::table_preview_css()`).
+#'
+#' @return A `shiny::tags$style` element.
 #' @keywords internal
+#' @export
 table_preview_css <- function() {
   shiny::tags$style(shiny::HTML("
     .blockr-table-container {
