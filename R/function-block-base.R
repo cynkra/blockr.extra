@@ -85,166 +85,35 @@ validate_function_args <- function(fn, required_args, error_message) {
 }
 
 
-#' Create CSS for function block
-#'
-#' @param advanced_id Namespaced ID for advanced options div
-#' @param class_prefix Prefix for CSS classes (e.g., "function-block")
-#' @return HTML style tag
-#' @noRd
-function_block_css <- function(advanced_id, class_prefix = "function-block") {
-  shiny::tags$style(shiny::HTML(sprintf(
-    "
-    .%s-container {
-      width: 100%%;
-      padding-bottom: 10px;
-    }
-    .%s-params {
-      display: grid;
-      gap: 15px;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      margin-bottom: 10px;
-    }
-    .%s-params .shiny-input-container {
-      width: 100%% !important;
-    }
-    .%s-params .form-group {
-      width: 100%%;
-      margin-bottom: 0;
-    }
-    .%s-params .form-control {
-      width: 100%%;
-    }
-    .function-block-error {
-      color: #dc3545;
-      font-size: 0.875rem;
-      margin-top: 5px;
-    }
-    #%s {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.3s ease-out;
-    }
-    #%s.expanded {
-      max-height: 800px;
-      overflow: visible;
-      transition: max-height 0.5s ease-in;
-    }
-    .block-advanced-toggle {
-      cursor: pointer;
-      user-select: none;
-      padding: 8px 0;
-      margin-bottom: 0;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.8125rem;
-    }
-    .block-chevron {
-      transition: transform 0.2s;
-      display: inline-block;
-      font-size: 14px;
-      font-weight: bold;
-    }
-    .block-chevron.rotated {
-      transform: rotate(90deg);
-    }
-    .function-editor-wrapper {
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
-      margin-top: 10px;
-    }
-    .function-editor-wrapper .shiny-ace {
-      border: none;
-    }
-    ",
-    class_prefix, class_prefix, class_prefix, class_prefix, class_prefix,
-    advanced_id, advanced_id
-  )))
-}
-
-
 #' Create function editor UI
+#'
+#' The standard gear button (top-right) toggles an inline editor section that
+#' pushes the params/output below it down. There is no block-private error
+#' panel: a *syntax* error disables Run in the editor footer (you can't run
+#' un-parseable code), and a *runtime* error surfaces through the normal blockr
+#' evaluation system like any other block.
 #'
 #' @param ns Namespace function
 #' @param fn_text Initial function code
-#' @param hint_text Hint text shown next to Apply button
+#' @param hint_text Unused (kept for back-compatible call sites).
 #' @param class_prefix Prefix for CSS classes
 #' @return Shiny tagList
 #' @noRd
 function_block_ui <- function(ns, fn_text, hint_text, class_prefix = "function-block") {
-  advanced_id <- ns("advanced-options")
-
-shiny::tagList(
-  shinyjs::useShinyjs(),
-  function_block_css(advanced_id, class_prefix),
-
-  shiny::div(
-    class = paste0(class_prefix, "-container"),
-
-    # Dynamic parameter inputs
+  shiny::tagList(
     shiny::div(
-      class = paste0(class_prefix, "-params"),
-      shiny::uiOutput(ns("dynamic_params"))
-    ),
+      class = paste0(class_prefix, "-container"),
 
-    # Error display
-    shiny::uiOutput(ns("error_display")),
+      # Authoring surface: gear-toggled inline editor (pushes content below down).
+      gear_editor_ui(ns, fn_text, label = "Function code"),
 
-    # Advanced toggle
-    shiny::div(
-      class = "block-advanced-toggle text-muted",
-      id = ns("advanced-toggle"),
-      onclick = sprintf(
-        "
-        const section = document.getElementById('%s');
-        const chevron = document.querySelector('#%s .block-chevron');
-        section.classList.toggle('expanded');
-        chevron.classList.toggle('rotated');
-        ",
-        advanced_id,
-        ns("advanced-toggle")
-      ),
-      shiny::tags$span(class = "block-chevron", "\u203A"),
-      "Edit function"
-    ),
-
-    # Advanced options (function editor)
-    shiny::div(
-      id = advanced_id,
+      # Dynamic parameter inputs (the resting surface).
       shiny::div(
-        style = "padding: 10px 0;",
-        shiny::div(
-          class = "function-editor-wrapper",
-          shinyAce::aceEditor(
-            outputId = ns("fn_code"),
-            value = fn_text,
-            mode = "r",
-            theme = "tomorrow",
-            height = "200px",
-            fontSize = 13,
-            showLineNumbers = TRUE,
-            tabSize = 2,
-            showPrintMargin = FALSE,
-            highlightActiveLine = TRUE
-          )
-        ),
-        shiny::div(
-          style = "margin-top: 10px;",
-          shiny::actionButton(
-            ns("submit_fn"),
-            "Apply Function",
-            class = "btn-primary btn-sm"
-          ),
-          shiny::span(
-            class = "text-muted",
-            style = "margin-left: 10px; font-size: 0.8rem;",
-            hint_text
-          )
-        )
+        class = paste0(class_prefix, "-params"),
+        shiny::uiOutput(ns("dynamic_params"))
       )
     )
   )
-)
 }
 
 
@@ -382,11 +251,10 @@ setup_function_block_server <- function(
   r_error <- shiny::reactiveVal(NULL)
   r_version <- shiny::reactiveVal(0L)
 
-  # Reverse sync: reactiveVal -> Ace editor (for AI/external updates)
+  # Parse/validate on every change of the code text. The editor reverse-sync
+  # (pushing AI/external writes into the editor + the inline diff) is handled by
+  # setup_code_editor_server (blockr-code-set), not here.
   shiny::observeEvent(r_fn_text(), {
-    if (!identical(r_fn_text(), input$fn_code)) {
-      shinyAce::updateAceEditor(session, "fn_code", value = r_fn_text())
-    }
     result <- tryCatch({
       parsed <- eval(parse(text = r_fn_text()))
       if (!is.function(parsed)) stop("Code must evaluate to a function")
@@ -449,10 +317,8 @@ output$dynamic_params <- shiny::renderUI({
   args <- args[!names(args) %in% skip_args]
 
   if (length(args) == 0) {
-    return(shiny::div(
-      class = "text-muted",
-      "No parameters to configure"
-    ))
+    # No params: render nothing (stay blank) rather than a placeholder note.
+    return(NULL)
   }
 
   ui_elements <- lapply(names(args), function(arg_name) {

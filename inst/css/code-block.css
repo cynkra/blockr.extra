@@ -1,0 +1,196 @@
+/* Code block — the CodeMirror editor shown inline on the card.
+ * Hand-rolled to the blockr design system (blockr.docs/design-system): no
+ * framework classes, --blockr-* tokens with literal fallbacks so it renders
+ * standalone. */
+
+.blockr-code-block { width: 100%; margin-bottom: 10px; }
+
+.blockr-code-label {
+  display: block;
+  font-weight: 500;
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-color-text-secondary, #6b7280);
+  margin-bottom: 6px;
+}
+
+/* Bordered frame holding the editor + the flush footer. */
+.blockr-code-frame {
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* The CodeMirror mount. */
+.blockr-code .cm-editor { height: 220px; }
+.blockr-code .cm-editor.cm-focused { outline: none; }
+.blockr-code .cm-scroller {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+/* A little breathing room so the code isn't flush against the frame edges.
+ * Padding on .cm-content keeps the line-number gutter aligned and the diff
+ * line-backgrounds intact. */
+.blockr-code .cm-content { padding: 6px 0; }
+.blockr-code .cm-line { padding-left: 10px; padding-right: 10px; }
+.blockr-code .cm-gutters { padding-left: 2px; }
+
+/* Align the inline hunk (CodeMirror-merge) buttons to blockr.dplyr's
+ * click-through pill (`.blockr-pill`): 11px / weight 500 / 2px 8px / 4px radius,
+ * page font. The light green/red two-tone is kept (semantic diff convention, and
+ * consistent with dplyr's tinted `.blockr-expr-confirm`); only the type scale is
+ * brought down so they read as the same quiet control family. */
+.blockr-code .cm-chunkButtons button {
+  border-radius: 4px;
+  /* These buttons live INSIDE the CodeMirror editor, so `inherit` would pick up
+   * the editor's monospace; pin them to the page font instead (Bootstrap's
+   * body font; design-system default sans). */
+  font-family: var(--bs-body-font-family,
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-weight: 500;
+  font-size: 11px;
+  padding: 2px 8px;
+}
+/* Light two-tone Accept/Reject (same as the footer). !important to beat the
+ * solid #2a2/#d43 from CodeMirror-merge's runtime-injected theme. */
+.blockr-code .cm-chunkButtons button[name="accept"] {
+  background: #e9f9ef !important; color: #15803d !important;
+  border: 1px solid #b7ebcb !important;
+}
+.blockr-code .cm-chunkButtons button[name="reject"] {
+  background: #fdecec !important; color: #b91c1c !important;
+  border: 1px solid #f5c6c6 !important;
+}
+
+/* Flush footer bar (review controls OR Run), attached to the editor's bottom. */
+.blockr-code-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px;
+  /* Constant height across states (review / dirty-Run / rest) so toggling the
+   * footer contents never reflows the block. The empty rest bar keeps this
+   * height too. (Open question: whether a persistent bar is preferable to
+   * collapsing — see .blockr-code-footer--rest.) */
+  box-sizing: border-box;
+  min-height: 35px;
+  border-top: 1px solid var(--blockr-color-border, #e5e7eb);
+  background: var(--blockr-grey-50, #f9fafb);
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+}
+/* Rest state: present (holds the height) but quiet — no actions. */
+.blockr-code-footer--rest { }
+.blockr-code-footer__label {
+  color: var(--blockr-color-text-secondary, #6b7280);
+  /* Let a long syntax-error message ellipsize instead of pushing the actions
+   * (Run) button out of the bar. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.blockr-code-footer__actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* Footer buttons — hand-rolled, no framework. Scoped under .blockr-code-footer
+ * so they win over any ambient .btn rules. Accept/Reject match the inline hunk
+ * buttons (solid green/red); Run uses the design-system tinted-primary confirm. */
+.blockr-code-footer .blockr-code-btn {
+  height: 24px;
+  box-sizing: border-box;
+  /* Flex-center the label so the 1px border doesn't push the text off-centre
+   * (was sitting slightly high). */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Match blockr.dplyr's click-through pill scale: 11px / weight 500 / 2px 8px. */
+  padding: 2px 8px;
+  border: none;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, filter 0.15s ease;
+}
+.blockr-code-footer .blockr-code-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+/* Accept / Reject as light two-tone badges (matches blockr-dock's
+ * `.badge-two-tone`: light tint + same-hue text + subtle border), font
+ * inherited from the page. */
+.blockr-code-footer .blockr-code-btn--accept {
+  background: #e9f9ef; color: #15803d; border: 1px solid #b7ebcb;
+}
+.blockr-code-footer .blockr-code-btn--accept:hover { background: #d6f5e1; }
+.blockr-code-footer .blockr-code-btn--reject {
+  background: #fdecec; color: #b91c1c; border: 1px solid #f5c6c6;
+}
+.blockr-code-footer .blockr-code-btn--reject:hover { background: #fbdcdc; }
+/* Run as the same two-tone badge, in blue. */
+.blockr-code-footer .blockr-code-btn--run {
+  background: #eaf1fd; color: var(--blockr-color-primary, #2563eb);
+  border: 1px solid #c3d6fb;
+}
+.blockr-code-footer .blockr-code-btn--run:hover { background: #dce8fc; }
+/* Muted return-glyph keyboard hint on the Run button (full shortcut on hover
+ * via the button's title). */
+.blockr-code-footer .blockr-code-kbd {
+  margin-left: 5px;
+  opacity: 0.55;
+  font-size: 0.95em;
+}
+/* Disabled Run = pending edit has a syntax error: can't be run. */
+.blockr-code-footer .blockr-code-btn--run:disabled,
+.blockr-code-footer .blockr-code-btn--run[disabled] {
+  background: var(--blockr-grey-200, #f1f3f5);
+  color: var(--blockr-grey-400, #adb5bd);
+  border-color: var(--blockr-grey-300, #dee2e6);
+  cursor: not-allowed;
+}
+/* Red footer label for a syntax error in the pending edit. */
+.blockr-code-footer .blockr-code-syntax-msg {
+  color: var(--blockr-color-danger, #d6336c);
+  font-weight: 600;
+}
+
+.function-block-container { width: 100%; padding-bottom: 10px; }
+.function-block-params {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 8px;
+}
+
+/* --- Gear-toggled inline editor section (authoring surface) ---
+ * The standard gear button (mirrors blockr.dplyr's `.blockr-gear-btn`) toggles
+ * an in-flow section that pushes the content below it down. */
+.blockr-gear-editor { width: 100%; }
+.blockr-gear-header {
+  display: flex; align-items: center; justify-content: flex-end;
+  margin-bottom: 6px;
+}
+.blockr-gear-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex-shrink: 0;
+  color: var(--blockr-grey-400, #9ca3af);
+  background: transparent;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 4px; cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.blockr-gear-btn:hover {
+  color: var(--blockr-color-primary, #2563eb);
+  border-color: rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.04);
+}
+.blockr-gear-btn.blockr-gear-active {
+  color: var(--blockr-color-primary, #2563eb);
+  border-color: rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.08);
+}
+.blockr-gear-section { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
+/* A comfortable, ~2x-taller editor than the 220px default. */
+.blockr-gear-section .blockr-code .cm-editor { height: 440px; }

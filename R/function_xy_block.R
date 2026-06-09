@@ -1,5 +1,11 @@
 #' Function XY Transform Block
 #'
+#' @description
+#' **Deprecated.** Use [new_function_var_block()] with two inputs instead. This
+#' block is no longer in the registered block vocabulary (dropped from
+#' `register_extra_blocks()`); it stays callable on the shared editor only for
+#' back-compatibility with existing boards.
+#'
 #' A block that wraps a user-defined R function with two data inputs (x and y)
 #' and automatically generates UI based on the function's argument defaults.
 #' Similar to [new_function_block()] but accepts two data frames as input.
@@ -85,6 +91,18 @@ new_function_xy_block <- function(
             required_args = c("x", "y"),
             skip_args = c("x", "y"),
             error_message = "Function must have 'x' as first argument and 'y' as second argument"
+          )
+
+          # The shared Blockr.Code editor (autocomplete over both inputs' cols).
+          setup_code_editor_server(
+            input, output, session, base,
+            cols = shiny::reactive(unique(c(
+              tryCatch(names(x()), error = function(e) NULL),
+              tryCatch(names(y()), error = function(e) NULL)
+            ))),
+            required_args = c("x", "y"),
+            contract_message =
+              "Function must have 'x' as first argument and 'y' as second argument"
           )
 
           # Build expression

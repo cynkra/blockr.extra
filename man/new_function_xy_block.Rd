@@ -14,6 +14,11 @@ argument. Default values of other arguments determine the UI widgets.}
 \item{...}{Additional arguments passed to new_block}
 }
 \description{
+\strong{Deprecated.} Use \code{\link[=new_function_var_block]{new_function_var_block()}} with two inputs instead. This
+block is no longer in the registered block vocabulary (dropped from
+\code{register_extra_blocks()}); it stays callable on the shared editor only for
+back-compatibility with existing boards.
+
 A block that wraps a user-defined R function with two data inputs (x and y)
 and automatically generates UI based on the function's argument defaults.
 Similar to \code{\link[=new_function_block]{new_function_block()}} but accepts two data frames as input.

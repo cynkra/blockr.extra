@@ -8,7 +8,6 @@ register_extra_blocks <- function() {
   blockr.core::register_blocks(
     c(
       "new_function_block",
-      "new_function_xy_block",
       "new_function_var_block",
       "new_async_function_block",
       "new_broom_summary_block",
@@ -17,7 +16,6 @@ register_extra_blocks <- function() {
     ),
     name = c(
       "Function block",
-      "Function XY block",
       "Function Var block",
       "Async Function block",
       "Broom Summary",
@@ -25,8 +23,7 @@ register_extra_blocks <- function() {
       "Search"
     ),
     description = c(
-      "Transform data with a custom R function. UI auto-generated from function arguments.",
-      "Transform two data frames (x, y) with a custom R function. UI auto-generated from function arguments.",
+      "Transform data with a custom R function in a CodeMirror editor (syntax highlighting, autocomplete, inline AI diff). UI auto-generated from function arguments.",
       "Transform multiple data frames (...) with a custom R function. UI auto-generated from function arguments.",
       "Transform data with a custom R function asynchronously. Requires mirai daemons. Click Run to execute.",
       "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
@@ -39,11 +36,9 @@ register_extra_blocks <- function() {
       "transform",
       "transform",
       "transform",
-      "transform",
       "transform"
     ),
     icon = c(
-      "code-slash",
       "code-slash",
       "code-slash",
       "hourglass-split",
@@ -58,36 +53,28 @@ register_extra_blocks <- function() {
           fn = "A string of R code that evaluates to a function. The function must have 'data' as its first argument (the input data frame). Additional arguments with defaults become UI widgets."
         ),
         examples = list(
-          fn = "function(data, column = c('Sepal.Length' = 'Sepal.Length', 'Sepal.Width' = 'Sepal.Width'), n = 6L, descending = FALSE) { data <- data[order(data[[column]], decreasing = descending), ]; utils::head(data, n) }"
+          # MULTI-LINE and indented (anchors readable output, not one-liners) and
+          # demonstrates BOTH a c() single-select (sort_by) AND a list()
+          # multi-select (keep) so the model has the multi-select pattern to copy.
+          fn = paste(
+            "function(data,",
+            "         sort_by = c('Sepal.Length' = 'Sepal.Length', 'Sepal.Width' = 'Sepal.Width'),",
+            "         keep = list('Sepal.Length' = 'Sepal.Length', 'Species' = 'Species'),",
+            "         n = 6L) {",
+            "  data <- data[order(data[[sort_by]]), unlist(keep), drop = FALSE]",
+            "  utils::head(data, n)",
+            "}",
+            sep = "\n"
+          )
         ),
-        prompt = paste(
-          "Write the value of fn as a SINGLE-LINE R function string (no newlines inside the string — this is critical because the value is embedded in JSON).",
-          "The function MUST have 'data' as its first argument.",
-          "ALL additional parameters MUST have default values — a parameter without a default will crash the app.",
-          "Default value types map to UI widgets: character vector with multiple elements c('A' = 'a', 'B' = 'b') -> dropdown; single numeric -> number input; single logical -> checkbox; single character string -> text input.",
-          "For dropdown parameters, ALWAYS use a named c() vector where names are display labels and values are the actual values, e.g. column = c('Sepal.Length' = 'Sepal.Length', 'Petal.Width' = 'Petal.Width'). An unnamed c() vector will NOT create a dropdown — it will break the function.",
-          "Use column names from the actual data provided for any column-selection parameters.",
-          "Wrap the entire function body in curly braces on one line, separating statements with semicolons.",
-          "\n\nR coding rules: always use the base pipe |> (never %>%).",
-          "Namespace-prefix all functions except base and stats (e.g. dplyr::filter(), stringr::str_detect()).",
-          "\n\nData exploration: explore the data structure (e.g. str(data), names(data)) to write a function",
-          "that correctly references available columns and handles their data types.",
-          "When creating dropdown parameters, explore unique values (e.g. unique(data$col) or sort(unique(data$col)))",
-          "so you can populate the c() vector with ALL actual values from the data, not just the ones visible in the preview."
-        )
-      ),
-      # new_function_xy_block:
-      structure(
-        c(
-          fn = "A string of R code that evaluates to a function. The function must have 'x' as first and 'y' as second argument (two input data frames). Additional arguments with defaults become UI widgets."
-        ),
-        examples = list(
-          fn = "function(x, y) { dplyr::left_join(x, y, by = 'name') }"
-        ),
-        prompt = paste(
-          "Write a complete R function as a string. The function receives 'x' and 'y' (two data frames) as its first two arguments.",
-          "\n\nR coding rules: always use the base pipe |> (never %>%).",
-          "Namespace-prefix all functions except base and stats (e.g. dplyr::left_join(), stringr::str_detect())."
+        # Authored once in inst/prompts/function-block.md; see function_block_prompt().
+        prompt = tryCatch(
+          function_block_prompt(),
+          error = function(e) paste(
+            "Write `fn` as `function(data, ...)`; every extra argument needs a",
+            "default whose type picks the UI control (list() -> multi-select,",
+            "c() -> single-select). Use base pipe |> and namespace-prefix calls."
+          )
         )
       ),
       # new_function_var_block:
