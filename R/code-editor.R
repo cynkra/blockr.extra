@@ -31,6 +31,58 @@ parse_error <- function(code) {
   }, error = function(e) conditionMessage(e))
 }
 
+#' Condense a `parse()` error message for the status bar.
+#'
+#' `parse(text=)` reports e.g. `"<text>:6:0: unexpected end of input\n5: ...\n^"`.
+#' We keep just the first line and reformat the `<text>:L:C:` prefix to a terse
+#' `"Line L: <reason>"`. Falls back to the trimmed first line if it doesn't match.
+#'
+#' @param msg The string returned by [parse_error()].
+#' @return A short single-line string suitable for the footer.
+#' @noRd
+parse_error_brief <- function(msg) {
+  first <- sub("\n.*$", "", msg)
+  m <- regmatches(first, regexec("^<text>:(\\d+):\\d+:\\s*(.*)$", first))[[1]]
+  if (length(m) == 3L) {
+    sprintf("Line %s: %s", m[2L], m[3L])
+  } else {
+    trimws(first)
+  }
+}
+
+
+#' Check parsed code satisfies the block's argument contract.
+#'
+#' A function block's code must be a single `function(...)` literal whose leading
+#' formals match `required_args` (e.g. `"data"`, or `c("x", "y")`). The check is
+#' done on the parse tree — no `eval()` — so half-typed code is never executed.
+#'
+#' @param code Character string of R code (already known to parse).
+#' @param required_args Character vector of required leading formal names, or
+#'   `NULL`/empty to skip the check.
+#' @param message Block-specific message to return on a violation.
+#' @return `NULL` if the contract holds, otherwise `message`.
+#' @noRd
+contract_error <- function(code, required_args, message) {
+  if (is.null(required_args) || !length(required_args)) {
+    return(NULL)
+  }
+  exprs <- tryCatch(parse(text = code), error = function(e) NULL)
+  # Must be exactly one top-level expression, and it must be a `function` literal.
+  if (is.null(exprs) || length(exprs) != 1L) {
+    return(message)
+  }
+  e <- exprs[[1L]]
+  if (!is.call(e) || !identical(e[[1L]], as.name("function"))) {
+    return(message)
+  }
+  formal_names <- names(e[[2L]])  # formals pairlist; no evaluation
+  if (length(formal_names) < length(required_args) ||
+      !identical(formal_names[seq_along(required_args)], required_args)) {
+    return(message)
+  }
+  NULL
+}
 
 #' Wire the code editor's server logic onto a function-block `base`
 #'
@@ -45,10 +97,17 @@ parse_error <- function(code) {
 #'   (`r_fn_text`, `r_fn`, `r_version`, ...).
 #' @param cols A reactive returning a character vector of column names to offer
 #'   in autocomplete (boosted above the static R/dplyr verbs). Defaults to none.
+#' @param required_args Character vector of required leading formal names for the
+#'   block's signature contract (e.g. `"data"`), surfaced in the status bar when
+#'   violated. `NULL` skips the contract check.
+#' @param contract_message Message shown in the status bar when `required_args`
+#'   is violated (the block's existing `error_message`).
 #' @return Invisibly `NULL` (used for its side effects).
 #' @noRd
 setup_code_editor_server <- function(input, output, session, base,
-                                     cols = shiny::reactive(NULL)) {
+                                     cols = shiny::reactive(NULL),
+                                     required_args = NULL,
+                                     contract_message = NULL) {
   ns <- session$ns
 
   # Push the upstream column names to the editor whenever the data changes.
@@ -162,7 +221,11 @@ setup_code_editor_server <- function(input, output, session, base,
     } else {
       ed <- input$fn_code
       if (is.null(ed) || identical(trimws(ed), trimws(base$r_fn_text()))) {
-        return(NULL)
+        # At rest, keep the footer bar present but empty. Removing it would
+        # shrink the frame by its height and reflow the whole block upward on
+        # every Run; a persistent (quiet) bar holds the frame height constant.
+        # Constant height across states is enforced via `min-height` in CSS.
+        return(shiny::div(class = "blockr-code-footer blockr-code-footer--rest"))
       }
       perr <- parse_error(ed)
       if (!is.null(perr)) {
@@ -171,7 +234,19 @@ setup_code_editor_server <- function(input, output, session, base,
         # Only a parse error is shown here — runtime errors go through the
         # normal evaluation system, not this footer.
         code_block_footer(
-          shiny::span(class = "blockr-code-syntax-msg", "Syntax error"),
+          shiny::span(class = "blockr-code-syntax-msg", parse_error_brief(perr),
+                      title = perr),
+          shiny::actionButton(ns("submit_fn"), "Run",
+                              class = "blockr-code-btn blockr-code-btn--run",
+                              disabled = TRUE)
+        )
+      } else if (!is.null(cerr <- contract_error(ed, required_args,
+                                                 contract_message))) {
+        # Parses fine, but the signature breaks the block's contract (e.g. first
+        # arg isn't `data`). It would fail at run time anyway, so disable Run and
+        # show the contract message in the bar — same treatment as a syntax error.
+        code_block_footer(
+          shiny::span(class = "blockr-code-syntax-msg", cerr, title = cerr),
           shiny::actionButton(ns("submit_fn"), "Run",
                               class = "blockr-code-btn blockr-code-btn--run",
                               disabled = TRUE)
@@ -179,8 +254,16 @@ setup_code_editor_server <- function(input, output, session, base,
       } else {
         code_block_footer(
           "Pending edits",
-          shiny::actionButton(ns("submit_fn"), "Run",
-                              class = "blockr-code-btn blockr-code-btn--run")
+          # Surface the Mod-Enter shortcut: a muted return glyph on the button,
+          # full "Cmd/Ctrl + Enter" on hover. Only on the enabled Run — the
+          # disabled error-state buttons stay plain since the shortcut is gated
+          # on the code parsing.
+          shiny::actionButton(
+            ns("submit_fn"),
+            shiny::tagList("Run", shiny::span(class = "blockr-code-kbd", "↵")),
+            class = "blockr-code-btn blockr-code-btn--run",
+            title = "Run (⌘/Ctrl + Enter)"
+          )
         )
       }
     }

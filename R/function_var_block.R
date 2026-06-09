@@ -110,7 +110,9 @@ new_function_var_block <- function(
               unique(unlist(lapply(nms, function(n) {
                 tryCatch(names(...args[[n]]()), error = function(e) NULL)
               })))
-            })
+            }),
+            required_args = "...",
+            contract_message = "Function must have '...' as its first argument"
           )
 
           # Get argument names for variadic inputs

@@ -99,7 +99,10 @@ new_function_xy_block <- function(
             cols = shiny::reactive(unique(c(
               tryCatch(names(x()), error = function(e) NULL),
               tryCatch(names(y()), error = function(e) NULL)
-            )))
+            ))),
+            required_args = c("x", "y"),
+            contract_message =
+              "Function must have 'x' as first argument and 'y' as second argument"
           )
 
           # Build expression

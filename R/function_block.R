@@ -70,7 +70,9 @@ new_function_block <- function(
             input, output, session, base,
             cols = shiny::reactive(
               tryCatch(names(data()), error = function(e) character())
-            )
+            ),
+            required_args = "data",
+            contract_message = "Function must have 'data' as its first argument"
           )
 
           # Build expression
