@@ -24,7 +24,7 @@
  * short functions don't leave dead space, long ones scroll internally
  * (the scroller's overflow) instead of pushing the Run bar and the
  * downstream preview down the page. */
-.blockr-code .cm-editor { min-height: 140px; max-height: 480px; }
+.blockr-code .cm-editor { min-height: 140px; max-height: 528px; }
 .blockr-code .cm-editor.cm-focused { outline: none; }
 .blockr-code .cm-scroller {
   overflow: auto;
@@ -196,6 +196,7 @@
   background: rgba(37, 99, 235, 0.08);
 }
 .blockr-gear-section { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
-/* In the gear panel there's more room, so allow a taller cap before the
- * editor starts scrolling internally; it still shrinks to fit short code. */
-.blockr-gear-section .blockr-code .cm-editor { min-height: 180px; max-height: 70vh; }
+/* In the gear panel there's more room, so allow a taller floor; both share
+ * the same ~25-row cap (25 * 20.625px line + 12px content padding) before the
+ * editor starts scrolling internally. */
+.blockr-gear-section .blockr-code .cm-editor { min-height: 180px; max-height: 528px; }
