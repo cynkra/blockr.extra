@@ -1,108 +1,17 @@
-# blockr.extra-specific glue that wires the shared table preview
-# (table-preview.R) into blockr.core's block system.
-
-#' HTML Table Preview for Data Frames
-#'
-#' Replaces DT output with a lightweight HTML table for data blocks,
-#' transform blocks, and parser blocks.
-#'
-#' @param result The data frame result to display
-#' @param block The block object
-#' @param session Shiny session object
-#'
-#' @return A shiny renderUI object containing the HTML table
-#'
-#' @keywords internal
-html_table_result <- function(result, block, session) {
-
-  page_size <- tryCatch(
-    blockr.core::get_board_option_or_default(
-      "page_size",
-      blockr.core::board_options(block),
-      session
-    ),
-    error = function(e) 5L
-  )
-
-  html_table_render(result, session, page_size)
-}
-
-#' Render an Interactive HTML Table
-#'
-#' Stateless table renderer with server-side sorting and pagination.
-#' Sort and page state are managed in the browser via Shiny inputs ---
-#' no session$userData or observers required.
-#'
-#' @param result The data frame result to display
-#' @param session Shiny session object
-#' @param page_size Number of rows per page (default 5)
-#'
-#' @return A shiny renderUI object containing the HTML table
-#'
-#' @keywords internal
-html_table_render <- function(result, session, page_size = 5L) {
-  ns <- session$ns
-
-  shiny::renderUI({
-    tryCatch({
-      sort_input <- session$input$blockr_table_sort
-      current_sort <- if (!is.null(sort_input)) {
-        list(col = sort_input$col, dir = sort_input$dir)
-      } else {
-        list(col = NULL, dir = "none")
-      }
-
-      page <- session$input$blockr_table_page
-      page <- if (is.null(page)) 1L else as.integer(page)
-
-      total_rows <- if (is.null(result)) 0L else nrow(result)
-      max_page <- max(1L, ceiling(total_rows / page_size))
-      page <- min(max(1L, page), max_page)
-
-      # Extract table label before sorting/slicing strips it
-      tbl_label <- attr(result, "label")
-
-      sorted_result <- apply_table_sort(
-        result,
-        current_sort$col,
-        current_sort$dir
-      )
-
-      start_row <- (page - 1L) * page_size + 1L
-      end_row <- min(page * page_size, total_rows)
-      dat <- if (total_rows > 0 && end_row >= start_row) {
-        as.data.frame(dplyr::slice(sorted_result, start_row:end_row))
-      } else {
-        as.data.frame(sorted_result)
-      }
-
-      build_html_table(
-        dat,
-        total_rows,
-        sort_state = current_sort,
-        ns = ns,
-        page = page,
-        page_size = page_size,
-        table_label = tbl_label
-      )
-    }, error = function(e) {
-      shiny::tags$div(
-        class = "blockr-table-error",
-        style = "color: red; padding: 12px;",
-        paste("Error rendering table:", conditionMessage(e))
-      )
-    })
-  })
-}
-
-
-# --- S3 method overrides (opt-in via option) ---
+# blockr.extra-specific glue: opt-in S3 overrides that swap DT for the
+# shared HTML table preview (canonical implementation in blockr.ui).
+#
+# The preview itself (build_html_table / table_page / html_table_result)
+# lives in blockr.ui; this file only keeps the
+# `options(blockr.html_table_preview = TRUE)` switch wired into
+# blockr.core's data_block / transform_block render methods (captured and
+# overridden in zzz.R).
 
 #' Render block output with optional HTML table preview
 #' @noRd
 render_block_output_with_option <- function(x, result, session, original_method) {
   if (getOption("blockr.html_table_preview", FALSE)) {
-    html_table_result(result, x, session)
+    blockr.ui::html_table_result(result, x, session)
   } else if (!is.null(original_method)) {
     original_method(x, result, session)
   }
