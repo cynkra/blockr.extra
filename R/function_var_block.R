@@ -158,7 +158,11 @@ new_function_var_block <- function(
       )
     },
     dat_valid = function(...args) {
-      stopifnot(length(...args) >= 1L)
+      # Zero inputs is allowed: with `...` the block can act as a pure source
+      # (e.g. open a DB connection / read a file in the body and return a
+      # table), so it does not require any upstream data. One or more inputs
+      # is the merge / bind use.
+      TRUE
     },
     class = "function_var_block",
     allow_empty_state = TRUE,
