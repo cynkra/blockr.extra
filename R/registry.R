@@ -13,7 +13,8 @@ register_extra_blocks <- function() {
       "new_async_function_block",
       "new_broom_summary_block",
       "new_compare_block",
-      "new_search_block"
+      "new_search_block",
+      "new_latest_block"
     ),
     name = c(
       "Function block",
@@ -21,7 +22,8 @@ register_extra_blocks <- function() {
       "Async Function block",
       "Broom Summary",
       "Compare",
-      "Search"
+      "Search",
+      "Latest"
     ),
     description = c(
       "Transform data with a custom R function in a CodeMirror editor (syntax highlighting, autocomplete, inline AI diff). UI auto-generated from function arguments.",
@@ -29,9 +31,11 @@ register_extra_blocks <- function() {
       "Transform data with a custom R function asynchronously. Requires mirai daemons. Click Run to execute.",
       "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
       "Compare two data frames on key columns and compute diff metrics on measurement columns.",
-      "Filter rows by case-insensitive substring match across all columns."
+      "Filter rows by case-insensitive substring match across all columns.",
+      "Forward the value of whichever variadic input most recently changed (latest-wins merge / switch). Bridges multiple drill-down charts into one downstream block."
     ),
     category = c(
+      "transform",
       "transform",
       "transform",
       "transform",
@@ -45,7 +49,8 @@ register_extra_blocks <- function() {
       "hourglass-split",
       "clipboard-data",
       "arrow-left-right",
-      "search"
+      "search",
+      "shuffle"
     ),
     guidance = c(
       # new_function_block:
@@ -71,6 +76,8 @@ register_extra_blocks <- function() {
       # new_compare_block:
       "",
       # new_search_block:
+      "",
+      # new_latest_block:
       ""
     ),
     arguments = list(
@@ -109,6 +116,8 @@ register_extra_blocks <- function() {
       # new_compare_block:
       NULL,
       # new_search_block:
+      NULL,
+      # new_latest_block:
       NULL
     ),
     package = utils::packageName(),
