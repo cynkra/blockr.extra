@@ -34,4 +34,6 @@ Imports:
     gt
 Suggests:
     testthat (>= 3.0.0)
+Remotes:
+    BristolMyersSquibb/blockr.ui
 Config/testthat/edition: 3
