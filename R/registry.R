@@ -3,7 +3,8 @@
 #' Registers the experimental function blocks with blockr.
 #'
 #' @export
-#' @importFrom blockr.core register_blocks
+#' @importFrom blockr.core register_blocks new_block_args new_block_arg
+#'   arg_string
 register_extra_blocks <- function() {
   blockr.core::register_blocks(
     c(
@@ -46,17 +47,41 @@ register_extra_blocks <- function() {
       "arrow-left-right",
       "search"
     ),
+    guidance = c(
+      # new_function_block:
+      # Authored once in inst/prompts/function-block.md; see function_block_prompt().
+      tryCatch(
+        function_block_prompt(),
+        error = function(e) paste(
+          "Write `fn` as `function(data, ...)`; every extra argument needs a",
+          "default whose type picks the UI control (list() -> multi-select,",
+          "c() -> single-select). Use base pipe |> and namespace-prefix calls."
+        )
+      ),
+      # new_function_var_block:
+      paste(
+        "Write a complete R function as a string. The function receives '...' (any number of data frames) as its first argument.",
+        "\n\nR coding rules: always use the base pipe |> (never %>%).",
+        "Namespace-prefix all functions except base and stats (e.g. dplyr::bind_rows(), stringr::str_detect())."
+      ),
+      # new_async_function_block:
+      "",
+      # new_broom_summary_block:
+      "",
+      # new_compare_block:
+      "",
+      # new_search_block:
+      ""
+    ),
     arguments = list(
       # new_function_block:
-      structure(
-        c(
-          fn = "A string of R code that evaluates to a function. The function must have 'data' as its first argument (the input data frame). Additional arguments with defaults become UI widgets."
-        ),
-        examples = list(
+      new_block_args(
+        fn = new_block_arg(
+          "A string of R code that evaluates to a function. The function must have 'data' as its first argument (the input data frame). Additional arguments with defaults become UI widgets.",
           # MULTI-LINE and indented (anchors readable output, not one-liners) and
           # demonstrates BOTH a c() single-select (sort_by) AND a list()
           # multi-select (keep) so the model has the multi-select pattern to copy.
-          fn = paste(
+          example = paste(
             "function(data,",
             "         sort_by = c('Sepal.Length' = 'Sepal.Length', 'Sepal.Width' = 'Sepal.Width'),",
             "         keep = list('Sepal.Length' = 'Sepal.Length', 'Species' = 'Species'),",
@@ -65,30 +90,16 @@ register_extra_blocks <- function() {
             "  utils::head(data, n)",
             "}",
             sep = "\n"
-          )
-        ),
-        # Authored once in inst/prompts/function-block.md; see function_block_prompt().
-        prompt = tryCatch(
-          function_block_prompt(),
-          error = function(e) paste(
-            "Write `fn` as `function(data, ...)`; every extra argument needs a",
-            "default whose type picks the UI control (list() -> multi-select,",
-            "c() -> single-select). Use base pipe |> and namespace-prefix calls."
-          )
+          ),
+          type = arg_string()
         )
       ),
       # new_function_var_block:
-      structure(
-        c(
-          fn = "A string of R code that evaluates to a function. The function must have '...' as its first argument (variadic data frame inputs). Additional arguments with defaults become UI widgets."
-        ),
-        examples = list(
-          fn = "function(..., .id = NULL) { dplyr::bind_rows(..., .id = .id) }"
-        ),
-        prompt = paste(
-          "Write a complete R function as a string. The function receives '...' (any number of data frames) as its first argument.",
-          "\n\nR coding rules: always use the base pipe |> (never %>%).",
-          "Namespace-prefix all functions except base and stats (e.g. dplyr::bind_rows(), stringr::str_detect())."
+      new_block_args(
+        fn = new_block_arg(
+          "A string of R code that evaluates to a function. The function must have '...' as its first argument (variadic data frame inputs). Additional arguments with defaults become UI widgets.",
+          example = "function(..., .id = NULL) { dplyr::bind_rows(..., .id = .id) }",
+          type = arg_string()
         )
       ),
       # new_async_function_block:

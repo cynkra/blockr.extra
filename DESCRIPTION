@@ -35,5 +35,7 @@ Imports:
 Suggests:
     testthat (>= 3.0.0)
 Remotes:
+    BristolMyersSquibb/blockr.core,
+    BristolMyersSquibb/blockr.dplyr,
     BristolMyersSquibb/blockr.ui
 Config/testthat/edition: 3
