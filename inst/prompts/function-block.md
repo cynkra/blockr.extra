@@ -44,18 +44,27 @@ into your function under that name, and you use it in the body (e.g.
 | `x = NULL` (or no default) | text input (empty) | — | `""` until the user types |
 
 **The rule to remember: `list(...)` → multi-select with everything pre-selected;
-`c(...)` → single-select with the first pre-selected.** For both, prefer a
-*named* vector/list — the names are the on-screen labels, the values are what
-your code receives. For column- or value-pickers, populate the choices with the
-ACTUAL values from the data (`sort(unique(data$col))`), not just the few visible
-in the preview.
+`c(...)` → single-select with the first pre-selected.** For column- or
+value-pickers, populate the choices with the ACTUAL values from the data
+(`sort(unique(data$col))`), not just the few visible in the preview.
 
-Example (note `sort_by = c(...)` is a single-select, `keep = list(...)` is a
-multi-select):
+**Use NAMED elements to give each choice a nice, human-readable label.** In both
+`c(...)` and `list(...)` the syntax is `"Label shown to the user" = "value_your_code_gets"`:
+the *name* is the on-screen label, the *value* is what your function receives.
+The two do NOT have to match — this is exactly how you turn a cryptic code into a
+friendly label. For example `c("Baseline visit" = "BL", "Week 12" = "WK12")`
+shows *Baseline visit* / *Week 12* in the dropdown but passes `"BL"` / `"WK12"`
+into your code. When the raw value is already self-explanatory you can repeat it
+(`c("Species" = "Species")`), but reach for a descriptive name whenever it makes
+the control clearer.
+
+Example — `sort_by = c(...)` is a single-select and `keep = list(...)` is a
+multi-select; note how the names are readable labels while the values are the
+actual column names the code uses:
 
     function(data,
-             sort_by = c("Sepal.Length" = "Sepal.Length", "Sepal.Width" = "Sepal.Width"),
-             keep = list("Sepal.Length" = "Sepal.Length", "Species" = "Species"),
+             sort_by = c("Sepal length (cm)" = "Sepal.Length", "Sepal width (cm)" = "Sepal.Width"),
+             keep = list("Sepal length (cm)" = "Sepal.Length", "Flower species" = "Species"),
              n = 6L) {
       data <- data[order(data[[sort_by]]), unlist(keep), drop = FALSE]
       utils::head(data, n)

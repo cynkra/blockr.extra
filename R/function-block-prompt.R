@@ -23,6 +23,8 @@ function_block_prompt <- function() {
     "Every extra argument needs a default; its type picks the UI control:",
     "list(...) -> multi-select (all selected); c(...) -> single-select (first);",
     "single numeric -> number input; logical -> checkbox; character -> text.",
+    "Name the elements to label choices: c(\"Nice label\" = \"value\") shows the",
+    "name and passes the value into your code (names and values can differ).",
     "Use the base pipe |> and namespace-prefix non-base/stats calls.",
     "Explore the data (names(data), sort(unique(data$col))) before referencing columns."
   )

@@ -90,8 +90,8 @@ register_extra_blocks <- function() {
           # multi-select (keep) so the model has the multi-select pattern to copy.
           example = paste(
             "function(data,",
-            "         sort_by = c('Sepal.Length' = 'Sepal.Length', 'Sepal.Width' = 'Sepal.Width'),",
-            "         keep = list('Sepal.Length' = 'Sepal.Length', 'Species' = 'Species'),",
+            "         sort_by = c('Sepal length (cm)' = 'Sepal.Length', 'Sepal width (cm)' = 'Sepal.Width'),",
+            "         keep = list('Sepal length (cm)' = 'Sepal.Length', 'Flower species' = 'Species'),",
             "         n = 6L) {",
             "  data <- data[order(data[[sort_by]]), unlist(keep), drop = FALSE]",
             "  utils::head(data, n)",
