@@ -160,12 +160,97 @@
   font-weight: 600;
 }
 
-.function-block-container { width: 100%; padding-bottom: 10px; }
-.function-block-params {
+/* The container is a query context so the params grid reflows to the *block*
+ * width (set by the dock panel), not the viewport — same idiom as blockr.dplyr. */
+.function-block-container { width: 100%; padding-bottom: 10px; container-type: inline-size; }
+
+/* Params grid — fixed column counts (not auto-fit), so an odd leftover field
+ * keeps its column share instead of stretching to full width. A single field
+ * spans the full row; wide blocks step up to 3 columns, narrow ones collapse
+ * to a single stacked column. */
+.function-block-params { margin-bottom: 8px; }
+
+/* Params grid. Column count is driven by `--fb-cols` (set from R to the field
+ * count, capped at 3) so N fields never leave an empty trailing column — 2
+ * fields fill the row 50/50. Fixed tracks (not auto-fit) mean an odd leftover
+ * keeps its column share instead of stretching to full width. Container
+ * queries only ever step the count *down* on narrower panels. */
+.fb-params-grid {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  margin-bottom: 8px;
+  gap: 12px 12px;
+  grid-template-columns: repeat(var(--fb-cols, 2), minmax(0, 1fr));
+}
+.fb-params-grid > .block-input-wrapper:only-child {
+  grid-column: 1 / -1;
+}
+@container (max-width: 620px) {
+  .fb-params-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 360px) {
+  .fb-params-grid { grid-template-columns: 1fr; }
+}
+
+/* --- Auto-generated parameter fields ---------------------------------------
+ * Each field is a vertical stack: label on top, control below — matching the
+ * blockr.dplyr popover/field look. Neutralise Bootstrap's default form-group
+ * spacing so the grid gap is the single source of vertical rhythm. */
+.function-block-params .block-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.function-block-params .block-input-wrapper .form-group,
+.function-block-params .block-input-wrapper .shiny-input-container {
+  margin-bottom: 0;
+  width: 100%;
+}
+
+/* Field label — 13px / medium / secondary, consistent across select and
+ * text/number/checkbox fields. */
+.function-block-params .fb-field-label,
+.function-block-params .block-input-wrapper label.control-label,
+.function-block-params .block-input-wrapper .shiny-input-container > label {
+  display: block;
+  font-weight: 500;
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-color-text-secondary, #6b7280);
+  margin-bottom: 5px;
+}
+
+/* Text / number inputs → the shared bordered 42px control.
+ * Scoped to Shiny's `.form-control` only, so the transparent search `<input>`
+ * *inside* a Blockr.Select (`.blockr-select__search`, no `.form-control`) is
+ * never turned into a nested bordered box. */
+.function-block-params .block-input-wrapper .form-control {
+  width: 100%;
+  height: 42px;
+  padding: 8px 12px;
+  font-size: var(--blockr-font-size-base, 0.875rem);
+  color: var(--blockr-color-text-primary, #111827);
+  background-color: var(--blockr-color-bg-input, #f9fafb);
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.function-block-params .block-input-wrapper .form-control:focus {
+  outline: none;
+  background-color: #ffffff;
+  border-color: var(--blockr-color-primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.function-block-params .block-input-wrapper .form-control::placeholder {
+  color: var(--blockr-grey-400, #9ca3af);
+}
+
+/* Checkbox fields keep their inline label to the right of the box. */
+.function-block-params .block-input-wrapper .checkbox label,
+.function-block-params .block-input-wrapper .shiny-input-container .checkbox label {
+  font-weight: 400;
+  font-size: var(--blockr-font-size-base, 0.875rem);
+  color: var(--blockr-color-text-primary, #111827);
+  margin-bottom: 0;
 }
 
 /* --- Gear-toggled inline editor section (authoring surface) ---

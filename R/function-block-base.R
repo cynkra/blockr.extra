@@ -101,6 +101,9 @@ validate_function_args <- function(fn, required_args, error_message) {
 #' @noRd
 function_block_ui <- function(ns, fn_text, hint_text, class_prefix = "function-block") {
   shiny::tagList(
+    # Assets for the shared Blockr.Select used by choice-style params.
+    fb_select_deps(),
+
     shiny::div(
       class = paste0(class_prefix, "-container"),
 
@@ -155,30 +158,32 @@ create_input_for_arg <- function(arg_name, default, ns, strip_leading_dot = FALS
   shiny::div(
     class = "block-input-wrapper",
     if (is.list(default_val) && !is.data.frame(default_val)) {
-      # list() -> multi-select (names become labels, values are actual values)
+      # list() -> multi-select via the shared Blockr.Select component.
       choices <- unlist(default_val)
-      shiny::selectInput(
-        inputId = input_id,
+      fb_select_input(
+        input_id = input_id,
         label = label,
         choices = choices,
         selected = unname(choices),
         multiple = TRUE
       )
     } else if (is.character(default_val) && length(default_val) > 1) {
-      # c() with multiple values -> single selectInput (names become labels)
-      shiny::selectInput(
-        inputId = input_id,
+      # c() with multiple values -> single Blockr.Select.
+      fb_select_input(
+        input_id = input_id,
         label = label,
         choices = default_val,
-        selected = unname(default_val[1])
+        selected = unname(default_val[1]),
+        multiple = FALSE
       )
     } else if (is.numeric(default_val) && length(default_val) > 1) {
-      # Numeric vector -> single selectInput (names become labels)
-      shiny::selectInput(
-        inputId = input_id,
+      # Numeric vector -> single Blockr.Select.
+      fb_select_input(
+        input_id = input_id,
         label = label,
         choices = default_val,
-        selected = unname(default_val[1])
+        selected = unname(default_val[1]),
+        multiple = FALSE
       )
     } else if (is.numeric(default_val) && length(default_val) == 1) {
       # Single numeric -> numericInput
@@ -331,7 +336,15 @@ output$dynamic_params <- shiny::renderUI({
     )
   })
 
-  shiny::tagList(ui_elements)
+  # Column count = number of fields, capped at 3, so 2 fields fill the row
+  # (50/50) rather than leaving an empty trailing column. Container queries
+  # only ever step this *down* on narrow panels.
+  n_cols <- min(length(ui_elements), 3L)
+  shiny::div(
+    class = "fb-params-grid",
+    style = sprintf("--fb-cols:%d;", n_cols),
+    ui_elements
+  )
 })
 
 # Collect current parameter values
