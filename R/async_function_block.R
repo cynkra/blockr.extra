@@ -270,8 +270,17 @@ async_function_block_css <- function() {
 #' @return Shiny UI element
 #' @noRd
 render_async_result <- function(result, session) {
-  if (inherits(result, "gt_tbl")) {
-    shiny::HTML(gt::as_raw_html(result))
+  if (is_html_renderable(result)) {
+    # Ask the object for its HTML (gt, htmlwidgets, composer composed_table, ...).
+    tryCatch(
+      htmltools::as.tags(result),
+      error = function(e) {
+        shiny::pre(
+          style = "background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;",
+          paste(utils::capture.output(print(result)), collapse = "\n")
+        )
+      }
+    )
   } else if (inherits(result, "ggplot")) {
     output_id <- "plot_output"
     session$output[[output_id]] <- shiny::renderPlot({
