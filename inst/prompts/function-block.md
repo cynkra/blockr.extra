@@ -12,8 +12,17 @@ the block's input (the upstream result); the function returns the block's output
 - **The return value sets the output type**: a `data.frame`/tibble → interactive
   table; a `ggplot` → plot; a `gt` table → HTML table; a base plot → image; any
   other object → its printed text.
-- **R style**: use the base pipe `|>` (never `%>%`); namespace-prefix every
-  non-base/stats call (`dplyr::filter()`, `stringr::str_detect()`).
+- **R style**: prefer **dplyr** (and tidyr) verbs chained with the base pipe
+  `|>` for data manipulation — `dplyr::filter()`, `dplyr::mutate()`,
+  `dplyr::summarize()`, `dplyr::arrange()`, `dplyr::count()`; dplyr is always
+  installed. Fall back to base R only where dplyr has no verb. Use `|>` (never
+  `%>%`) and namespace-prefix every non-base/stats call (`dplyr::filter()`,
+  `stringr::str_detect()`) — packages are NOT attached in the block's
+  evaluation environment, so an unprefixed `filter()` fails at runtime.
+- **Parameterized columns in dplyr**: argument values arrive as *strings*.
+  Inside dplyr verbs refer to such a column as `.data[[col]]`
+  (e.g. `dplyr::filter(data, .data[[col]] > 0)`) and use `dplyr::all_of()`
+  for character vectors of column names — never a bare `col`.
 - **Formatting**: write **readable, multi-line code with indentation** — it is
   shown to the user in a code editor. Put each statement (and each function
   argument, when there are several) on its own line; do NOT cram the body onto a
@@ -66,6 +75,8 @@ actual column names the code uses:
              sort_by = c("Sepal length (cm)" = "Sepal.Length", "Sepal width (cm)" = "Sepal.Width"),
              keep = list("Sepal length (cm)" = "Sepal.Length", "Flower species" = "Species"),
              n = 6L) {
-      data <- data[order(data[[sort_by]]), unlist(keep), drop = FALSE]
-      utils::head(data, n)
+      data |>
+        dplyr::arrange(.data[[sort_by]]) |>
+        dplyr::select(dplyr::all_of(unname(unlist(keep)))) |>
+        dplyr::slice_head(n = n)
     }

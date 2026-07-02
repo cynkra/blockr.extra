@@ -65,7 +65,9 @@ register_extra_blocks <- function() {
         error = function(e) paste(
           "Write `fn` as `function(data, ...)`; every extra argument needs a",
           "default whose type picks the UI control (list() -> multi-select,",
-          "c() -> single-select). Use base pipe |> and namespace-prefix calls."
+          "c() -> single-select). Prefer dplyr verbs chained with the base",
+          "pipe |>; namespace-prefix calls (dplyr::filter()) and use",
+          ".data[[col]] for string-valued column parameters."
         )
       ),
       # new_function_var_block:
@@ -96,16 +98,22 @@ register_extra_blocks <- function() {
       new_block_args(
         fn = new_block_arg(
           "A string of R code that evaluates to a function. The function must have 'data' as its first argument (the input data frame). Additional arguments with defaults become UI widgets.",
-          # MULTI-LINE and indented (anchors readable output, not one-liners) and
+          # MULTI-LINE and indented (anchors readable output, not one-liners),
           # demonstrates BOTH a c() single-select (sort_by) AND a list()
-          # multi-select (keep) so the model has the multi-select pattern to copy.
+          # multi-select (keep) so the model has the multi-select pattern to
+          # copy, and is written in piped dplyr style (the preferred style; see
+          # inst/prompts/function-block.md) incl. the .data[[col]]/all_of()
+          # patterns for string-valued parameters. Keep in sync with the worked
+          # example at the end of that prompt file.
           example = paste(
             "function(data,",
             "         sort_by = c('Sepal length (cm)' = 'Sepal.Length', 'Sepal width (cm)' = 'Sepal.Width'),",
             "         keep = list('Sepal length (cm)' = 'Sepal.Length', 'Flower species' = 'Species'),",
             "         n = 6L) {",
-            "  data <- data[order(data[[sort_by]]), unlist(keep), drop = FALSE]",
-            "  utils::head(data, n)",
+            "  data |>",
+            "    dplyr::arrange(.data[[sort_by]]) |>",
+            "    dplyr::select(dplyr::all_of(unname(unlist(keep)))) |>",
+            "    dplyr::slice_head(n = n)",
             "}",
             sep = "\n"
           ),

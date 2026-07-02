@@ -25,7 +25,9 @@ function_block_prompt <- function() {
     "single numeric -> number input; logical -> checkbox; character -> text.",
     "Name the elements to label choices: c(\"Nice label\" = \"value\") shows the",
     "name and passes the value into your code (names and values can differ).",
-    "Use the base pipe |> and namespace-prefix non-base/stats calls.",
+    "Prefer dplyr verbs (dplyr::filter/mutate/summarize/arrange) chained with",
+    "the base pipe |>; namespace-prefix non-base/stats calls and use",
+    ".data[[col]] for string-valued column parameters.",
     "Explore the data (names(data), sort(unique(data$col))) before referencing columns."
   )
 }
