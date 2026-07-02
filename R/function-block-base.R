@@ -252,22 +252,42 @@ setup_function_block_server <- function(
 ) {
   # Reactive values to store current function state
   r_fn_text <- as_rv(fn_text, fn_text)
-  r_fn <- shiny::reactiveVal(parse_function_code(shiny::isolate(r_fn_text())))
   r_error <- shiny::reactiveVal(NULL)
   r_version <- shiny::reactiveVal(0L)
 
-  # Parse/validate on every change of the code text. The editor reverse-sync
-  # (pushing AI/external writes into the editor + the inline diff) is handled by
-  # setup_code_editor_server (blockr-code-set), not here.
+  # r_fn derives lazily from r_fn_text so that anything reading it (the block's
+  # expr, and hence core's `eval` reactive) sees a fresh write to r_fn_text
+  # WITHIN the same reactive handler. external_ctrl consumers (the AI
+  # validate_config path) write the fn text and immediately evaluate the block
+  # without an intervening flush; an observer-mediated parse would leave them
+  # evaluating the previous function. On parse/contract failure the last good
+  # function is kept (r_error carries the message for display).
+  last_good_fn <- parse_function_code(shiny::isolate(r_fn_text()))
+  r_fn <- shiny::reactive({
+    parsed <- tryCatch({
+      p <- eval(parse(text = r_fn_text()))
+      if (!is.function(p)) stop("Code must evaluate to a function")
+      validate_function_args(p, required_args, error_message)
+      p
+    }, error = function(e) NULL)
+    if (!is.null(parsed)) {
+      last_good_fn <<- parsed
+    }
+    last_good_fn
+  })
+
+  # Parse/validate on every change of the code text: surfaces r_error and bumps
+  # r_version. The editor reverse-sync (pushing AI/external writes into the
+  # editor + the inline diff) is handled by setup_code_editor_server
+  # (blockr-code-set), not here.
   shiny::observeEvent(r_fn_text(), {
     result <- tryCatch({
       parsed <- eval(parse(text = r_fn_text()))
       if (!is.function(parsed)) stop("Code must evaluate to a function")
       validate_function_args(parsed, required_args, error_message)
-      list(success = TRUE, fn = parsed)
+      list(success = TRUE)
     }, error = function(e) list(success = FALSE, error = conditionMessage(e)))
     if (result$success) {
-      r_fn(result$fn)
       r_error(NULL)
       r_version(r_version() + 1L)
     } else {
@@ -292,7 +312,6 @@ setup_function_block_server <- function(
 
     if (result$success) {
       r_fn_text(result$text)
-      r_fn(result$fn)
       r_error(NULL)
       r_version(r_version() + 1L)
     } else {
