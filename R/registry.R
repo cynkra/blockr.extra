@@ -14,7 +14,8 @@ register_extra_blocks <- function() {
       "new_broom_summary_block",
       "new_compare_block",
       "new_search_block",
-      "new_latest_block"
+      "new_latest_block",
+      "new_labeler_block"
     ),
     name = c(
       "Function block",
@@ -23,7 +24,8 @@ register_extra_blocks <- function() {
       "Broom Summary",
       "Compare",
       "Search",
-      "Latest"
+      "Latest",
+      "Labeler"
     ),
     description = c(
       "Transform data with a custom R function in a CodeMirror editor (syntax highlighting, autocomplete, inline AI diff). UI auto-generated from function arguments.",
@@ -32,9 +34,11 @@ register_extra_blocks <- function() {
       "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
       "Compare two data frames on key columns and compute diff metrics on measurement columns.",
       "Filter rows by case-insensitive substring match across all columns.",
-      "Forward the value of whichever variadic input most recently changed (latest-wins merge / switch). Bridges multiple drill-down charts into one downstream block."
+      "Forward the value of whichever variadic input most recently changed (latest-wins merge / switch). Bridges multiple drill-down charts into one downstream block.",
+      "Add or edit column labels (the `attr(col, \"label\")` attribute shown in column pickers and table headers). Empty label removes it."
     ),
     category = c(
+      "transform",
       "transform",
       "transform",
       "transform",
@@ -50,7 +54,8 @@ register_extra_blocks <- function() {
       "clipboard-data",
       "arrow-left-right",
       "search",
-      "shuffle"
+      "shuffle",
+      "tag"
     ),
     guidance = c(
       # new_function_block:
@@ -78,7 +83,13 @@ register_extra_blocks <- function() {
       # new_search_block:
       "",
       # new_latest_block:
-      ""
+      "",
+      # new_labeler_block:
+      paste(
+        "Set `labels` to a named list mapping existing column names to",
+        "human-readable label strings. Use an empty string to remove a",
+        "column's label. Columns not present in the data are ignored."
+      )
     ),
     arguments = list(
       # new_function_block:
@@ -118,7 +129,16 @@ register_extra_blocks <- function() {
       # new_search_block:
       NULL,
       # new_latest_block:
-      NULL
+      NULL,
+      # new_labeler_block:
+      # `labels` is an arbitrary-key map (column name -> label), which has
+      # no JSON-Schema subset — left untyped like blockr.dplyr's `renames`.
+      new_block_args(
+        labels = new_block_arg(
+          "Named list mapping column names to label strings. An empty string removes the column's label.",
+          example = 'list(mpg = "Miles per gallon", cyl = "Number of cylinders")'
+        )
+      )
     ),
     package = utils::packageName(),
     overwrite = TRUE

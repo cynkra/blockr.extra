@@ -1,0 +1,66 @@
+/* LabelerBlock — labeler block specific styles */
+/* Shared row/pill styles come from blockr.dplyr's blockr-blocks.css */
+
+/* Container for the narrow-layout @container query below */
+.labeler-block-container { width: 100%; container-type: inline-size; }
+
+.lb-card { overflow: visible; }
+
+/* Column select wrapper. Width follows the widest selected value:
+   the JS measures committed values and sets --lb-col-w on the rows
+   container; the clamp below keeps narrow panels and absurd names
+   in check. Fallback 160px until the first measurement lands. */
+.lb-col-wrap {
+  width: var(--lb-col-w, 160px);
+  min-width: 120px;
+  max-width: min(55%, 360px);
+  flex-shrink: 0;
+  transition: width 120ms ease;
+  border-right: 1px solid var(--blockr-color-border, #e5e7eb);
+  padding-right: 8px;
+}
+
+/* Arrow separator */
+.lb-arrow {
+  flex-shrink: 0;
+  color: var(--blockr-grey-400, #9ca3af);
+  font-size: 14px;
+  padding: 0 2px;
+}
+
+/* Label text input */
+.lb-label-input {
+  flex: 1;
+  min-width: 80px;
+  height: 30px;
+  padding: 4px 10px;
+  font-size: var(--blockr-font-size-base, 0.875rem);
+  background: transparent;
+  border: none;
+  color: var(--blockr-color-text-primary, #111827);
+  box-sizing: border-box;
+}
+
+.lb-label-input:focus { outline: none; }
+
+.lb-label-input::placeholder {
+  color: var(--blockr-grey-400, #9ca3af);
+}
+
+/* --- Narrow panels: stack the column select above the label input ---
+   Same pattern as blockr.dplyr's rename-block.css. */
+@container (max-width: 479px) {
+  .lb-rows .blockr-row {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .lb-col-wrap {
+    width: 100%;
+    max-width: none;
+    border-right: none;
+    border-bottom: 1px solid var(--blockr-color-border, #e5e7eb);
+    padding-right: 0;
+    padding-bottom: 2px;
+  }
+}
