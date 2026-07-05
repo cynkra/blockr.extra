@@ -165,7 +165,12 @@ new_function_var_block <- function(
       TRUE
     },
     class = "function_var_block",
-    allow_empty_state = TRUE,
+    # `input = TRUE` keeps the `fn` state field from wedging when cleared;
+    # `data = list(...args = 0)` tells core the block needs ZERO variadic
+    # inputs, so it can act as a pure source (read a file / open a DB in the
+    # body) instead of sitting in "waiting" on start. Without the `...args`
+    # entry, core defaults min_args to 1L and gates the block on one input.
+    allow_empty_state = list(input = TRUE, data = list(...args = 0L)),
     external_ctrl = "fn",
     ...
   )
