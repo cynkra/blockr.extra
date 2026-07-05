@@ -10,8 +10,12 @@
 eval_with_plot_capture <- function(expr, env) {
   expr_text <- paste(deparse(expr), collapse = "\n")
 
-  # Create environment with access to all attached packages (stats, graphics, etc.)
-  eval_env <- list2env(as.list(env), parent = .GlobalEnv)
+  # Create environment with access to all attached packages (stats, graphics,
+  # etc.). all.names = TRUE is load-bearing: variadic inputs are bound under
+  # dot-prefixed reference symbols (.arg1, .arg2, ... for unnamed DAG-UI slots),
+  # and the default as.list() drops names starting with "." — which would strip
+  # those inputs out of the eval environment.
+  eval_env <- list2env(as.list(env, all.names = TRUE), parent = .GlobalEnv)
 
   # Use evaluate to run code and capture any plots
   res <- evaluate::evaluate(

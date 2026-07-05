@@ -614,3 +614,32 @@ test_that("function_var_block combined parameter values are reflected in result"
     )
   )
 })
+
+test_that("function_var_block keeps an unnamed (DAG-UI) input", {
+  # Regression: connecting a dataframe by dragging an edge in the DAG UI adds an
+  # *unnamed* link, which a live board stores as a positional slot in the
+  # `...args` reactives object. `names()` is then NULL, which used to collapse
+  # arg_names() to NULL -> `do.call(fn, list())` with no data (empty result).
+  # Build the positional `reactives` object the live board produces
+  # (reactiveValues() can only hold named slots).
+  block <- new_function_var_block()  # default fn = bind_rows(...)
+
+  args_obj <- shiny::isolate({
+    ra <- blockr.core:::reactives()
+    blockr.core:::append_reactive(ra, function() df1)
+    ra
+  })
+
+  testServer(
+    blockr.core::get_s3_method("block_server", block),
+    {
+      session$flushReact()
+      result <- session$returned$result()
+      # The unnamed input flows through bind_rows instead of being dropped.
+      expect_true(is.data.frame(result))
+      expect_equal(nrow(result), 3L)
+      expect_identical(result$name, df1$name)
+    },
+    args = list(x = block, data = list(...args = args_obj))
+  )
+})
