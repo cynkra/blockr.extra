@@ -13,9 +13,10 @@ new_compare_block(
 )
 }
 \arguments{
-\item{key_cols}{Character vector of columns to join on}
+\item{key_cols}{Character vector of columns to join on, in output order}
 
-\item{measure_cols}{Character vector of numeric columns to compare}
+\item{measure_cols}{Character vector of numeric columns to compare, in
+output order}
 
 \item{join_type}{Join type: \code{"inner"} (default) or \code{"full"}}
 
@@ -32,4 +33,9 @@ Compares two data frames with the same shape by joining on key columns
 and computing a diff metric on measurement columns. Output contains key
 columns plus one diff column per measurement, named identically to the
 original measurement columns.
+}
+\details{
+The UI follows the blockr.dplyr design system (JS-driven pickers built on
+the shared \code{Blockr.Select} component), so both column pickers are
+drag-reorderable and their pick order is the output column order.
 }

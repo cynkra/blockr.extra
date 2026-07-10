@@ -5,8 +5,13 @@
 #' columns plus one diff column per measurement, named identically to the
 #' original measurement columns.
 #'
-#' @param key_cols Character vector of columns to join on
-#' @param measure_cols Character vector of numeric columns to compare
+#' The UI follows the blockr.dplyr design system (JS-driven pickers built on
+#' the shared `Blockr.Select` component), so both column pickers are
+#' drag-reorderable and their pick order is the output column order.
+#'
+#' @param key_cols Character vector of columns to join on, in output order
+#' @param measure_cols Character vector of numeric columns to compare, in
+#'   output order
 #' @param join_type Join type: `"inner"` (default) or `"full"`
 #' @param metric Diff metric: `"diff"`, `"abs_diff"`, `"rel_diff"`,
 #'   `"ratio"`, or `"pct_change"`
@@ -31,18 +36,26 @@ new_compare_block <- function(
         id,
         function(input, output, session) {
 
-          r_key_cols <- blockr.dplyr::column_picker_server(
-            "key_picker",
-            get_choices = shiny::reactive(intersect(colnames(x()), colnames(y()))),
-            initial_value = shiny::reactiveVal(key_cols)
-          )
-          r_measure_cols <- blockr.dplyr::column_picker_server(
-            "measure_picker",
-            get_choices = shiny::reactive(intersect(colnames(x()), colnames(y()))),
-            initial_value = shiny::reactiveVal(measure_cols)
-          )
+          r_key_cols <- shiny::reactiveVal(key_cols)
+          r_measure_cols <- shiny::reactiveVal(measure_cols)
           r_join_type <- shiny::reactiveVal(join_type)
           r_metric <- shiny::reactiveVal(metric)
+
+          # Push the columns common to both inputs on every data change —
+          # blockr.dplyr's column-metadata protocol, so the pickers show the
+          # same name + label secondary text as every other block.
+          shiny::observeEvent(list(x(), y()), {
+            common <- intersect(colnames(x()), colnames(y()))
+            session$sendCustomMessage(
+              "compare-columns",
+              list(
+                id = session$ns("compare_input"),
+                columns = blockr.dplyr::build_column_picker_meta(
+                  x()[, common, drop = FALSE]
+                )
+              )
+            )
+          })
 
           # One-shot heuristic: fill defaults on first data load
           shiny::observe({
@@ -51,8 +64,43 @@ new_compare_block <- function(
             if (length(r_measure_cols()) == 0) r_measure_cols(h$measure_cols)
           }) |> shiny::bindEvent(x(), y(), once = TRUE)
 
-          shiny::observeEvent(input$join_type, r_join_type(input$join_type))
-          shiny::observeEvent(input$metric, r_metric(input$metric))
+          self_write <- new.env(parent = emptyenv())
+          self_write$active <- FALSE
+
+          # JS -> R: decompose the single state blob into the per-field
+          # reactiveVals blockr.core serializes and external controllers set.
+          shiny::observeEvent(input$compare_input, {
+            self_write$active <- TRUE
+            blob <- input$compare_input
+            r_key_cols(as.character(unlist(blob$key_cols)))
+            r_measure_cols(as.character(unlist(blob$measure_cols)))
+            r_join_type(blob$join_type)
+            r_metric(blob$metric)
+          })
+
+          r_state <- shiny::reactive(
+            list(
+              # as.list() so a single picked column stays a JSON array rather
+              # than auto_unboxing to a scalar the JS side would mis-slice.
+              key_cols = as.list(r_key_cols()),
+              measure_cols = as.list(r_measure_cols()),
+              join_type = r_join_type(),
+              metric = r_metric()
+            )
+          )
+
+          # R -> JS: restore, external control, and the heuristic seed. Fires
+          # on init; blockr-core.js queues it until the element binds.
+          shiny::observeEvent(r_state(), {
+            if (self_write$active) {
+              self_write$active <- FALSE
+            } else {
+              session$sendCustomMessage(
+                "compare-block-update",
+                list(id = session$ns("compare_input"), state = r_state())
+              )
+            }
+          })
 
           list(
             expr = shiny::reactive(
@@ -84,64 +132,15 @@ new_compare_block <- function(
     },
     function(id) {
       shiny::tagList(
-        shiny::tags$style(shiny::HTML("
-          .block-container { width: 100%; padding-bottom: 10px; }
-          .block-form-grid {
-            display: grid;
-            gap: 15px;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-          }
-          .block-input-wrapper { width: 100%; }
-          .block-input-wrapper .form-group { margin-bottom: 10px; }
-        ")),
+        blockr.dplyr::blockr_core_js_dep(),
+        blockr.dplyr::blockr_blocks_css_dep(),
+        blockr.dplyr::blockr_select_dep(),
+        compare_block_dep(),
         shiny::div(
           class = "block-container",
           shiny::div(
-            class = "block-form-grid",
-            shiny::div(
-              class = "block-input-wrapper",
-              blockr.dplyr::column_picker_ui(
-                shiny::NS(id, "key_picker"),
-                label = "Key columns",
-                choices = key_cols,
-                selected = key_cols
-              )
-            ),
-            shiny::div(
-              class = "block-input-wrapper",
-              blockr.dplyr::column_picker_ui(
-                shiny::NS(id, "measure_picker"),
-                label = "Measurement columns",
-                choices = measure_cols,
-                selected = measure_cols
-              )
-            ),
-            shiny::div(
-              class = "block-input-wrapper",
-              shiny::selectInput(
-                inputId = shiny::NS(id, "join_type"),
-                label = "Join type",
-                choices = c("Inner" = "inner", "Full" = "full"),
-                selected = join_type,
-                width = "100%"
-              )
-            ),
-            shiny::div(
-              class = "block-input-wrapper",
-              shiny::selectInput(
-                inputId = shiny::NS(id, "metric"),
-                label = "Diff metric",
-                choices = c(
-                  "Difference" = "diff",
-                  "Absolute difference" = "abs_diff",
-                  "Relative difference (%)" = "rel_diff",
-                  "Ratio" = "ratio",
-                  "Percent change" = "pct_change"
-                ),
-                selected = metric,
-                width = "100%"
-              )
-            )
+            id = shiny::NS(id, "compare_input"),
+            class = "compare-block-container"
           )
         )
       )
@@ -151,8 +150,28 @@ new_compare_block <- function(
     },
     expr_type = "bquoted",
     allow_empty_state = c("key_cols", "measure_cols"),
+    external_ctrl = TRUE,
     class = "compare_block",
     ...
+  )
+}
+
+#' HTML dependency for the compare block's JS + CSS
+#' @noRd
+compare_block_dep <- function() {
+  htmltools::tagList(
+    htmltools::htmlDependency(
+      name = "compare-block-js",
+      version = utils::packageVersion("blockr.extra"),
+      src = system.file("js", package = "blockr.extra"),
+      script = "compare-block.js"
+    ),
+    htmltools::htmlDependency(
+      name = "compare-block-css",
+      version = utils::packageVersion("blockr.extra"),
+      src = system.file("css", package = "blockr.extra"),
+      stylesheet = "compare-block.css"
+    )
   )
 }
 
