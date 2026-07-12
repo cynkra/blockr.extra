@@ -20,20 +20,17 @@ Imports:
     bslib,
     dplyr,
     evaluate,
-    glue,
     htmltools,
     jsonlite,
     mirai,
-    pillar,
     shiny,
-    shinyAce,
-    shinyjs,
     stats,
     stringr,
     utils,
-    DT,
-    gt
+    DT
 Suggests:
+    ggplot2,
+    gt,
     testthat (>= 3.0.0)
 Remotes:
     BristolMyersSquibb/blockr.core,

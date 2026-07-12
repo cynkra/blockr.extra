@@ -18,7 +18,8 @@
 #'   serve(new_broom_summary_block(), list(data = model))
 #' }
 #'
-#' @importFrom shiny moduleServer reactive tagList tags div uiOutput renderUI NS
+#' @importFrom shiny moduleServer reactive tagList tags div uiOutput renderUI NS HTML
+#' @importFrom broom tidy glance augment
 #' @export
 new_broom_summary_block <- function(...) {
   blockr.core::new_transform_block(
