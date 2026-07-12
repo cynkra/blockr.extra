@@ -2,10 +2,13 @@
 % Please edit documentation in R/ctrl-send.R
 \name{ctrl_send}
 \alias{ctrl_send}
+\alias{ctrl_clear}
 \alias{install_ctrl_send}
 \title{Cross-block external control}
 \usage{
 ctrl_send(target, ..., session = shiny::getDefaultReactiveDomain())
+
+ctrl_clear(target, ..., session = shiny::getDefaultReactiveDomain())
 
 install_ctrl_send(update, session = shiny::getDefaultReactiveDomain())
 }
@@ -23,8 +26,10 @@ plugins and dock extension servers.}
 \value{
 \code{ctrl_send()} returns \code{TRUE} (invisibly) when the payload was
 handed to the update channel, \code{FALSE} when no channel is installed
-(a warning is emitted once per session). \code{install_ctrl_send()} returns
-the send closure, invisibly.
+(a warning is emitted once per session). \code{ctrl_clear()} returns \code{TRUE}
+(invisibly) when the caller owned the target's last claim and the reset
+was sent, \code{FALSE} otherwise (not the owner, or no channel installed).
+\code{install_ctrl_send()} returns the send closure, invisibly.
 }
 \description{
 A pair of helpers that let one block set the externally controllable
@@ -55,6 +60,20 @@ re-evaluated (and thus sends) only while it is on screen, which is
 exactly when its upstream chart can be clicked. Repeated sends of an
 unchanged value are no-ops (\code{apply_block_mod_delta()} compares with
 \code{identical()}).
+}
+
+\section{Clearing (\code{ctrl_clear()})}{
+
+The undo side of \code{ctrl_send()}, with ownership semantics: it resets the
+target's controllable arguments \strong{only if the last \code{ctrl_send()} to that
+target came from the same block}. This is what lets a data-driven sender
+propagate an un-drill (its input reverts to the no-claim shape, so it
+calls \code{ctrl_clear()}) without ever clobbering state it does not own: a
+sender that merely re-evaluates undrilled -- at startup, on a board
+restore, or while a \emph{different} sender's claim (or a manual edit riding
+on one) is active on the target -- finds it owns nothing and no-ops.
+Named values passed via \code{...} are what "cleared" means for the target
+(e.g. \code{state = list(columns = list())} empties a value filter).
 }
 
 \examples{
