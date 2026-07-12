@@ -1,6 +1,11 @@
 # Store references to original blockr.core methods
 .blockr_extra_env <- new.env(parent = emptyenv())
 
+# `.`, `kc`, `mc`, `jt`, `mt`: bbquote() template placeholder names (the
+# substitution list's names), not real globals -- R CMD check can't see
+# through the quasiquotation.
+utils::globalVariables(c(".", "kc", "mc", "jt", "mt"))
+
 #' Override blockr.core methods with blockr.extra implementations
 #'
 #' Injects blockr.extra's block_output and block_ui methods for data_block

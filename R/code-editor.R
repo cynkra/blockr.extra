@@ -260,9 +260,9 @@ setup_code_editor_server <- function(input, output, session, base,
           # on the code parsing.
           shiny::actionButton(
             ns("submit_fn"),
-            shiny::tagList("Run", shiny::span(class = "blockr-code-kbd", "↵")),
+            shiny::tagList("Run", shiny::span(class = "blockr-code-kbd", "\u21B5")),
             class = "blockr-code-btn blockr-code-btn--run",
-            title = "Run (⌘/Ctrl + Enter)"
+            title = "Run (\u2318/Ctrl + Enter)"
           )
         )
       }
