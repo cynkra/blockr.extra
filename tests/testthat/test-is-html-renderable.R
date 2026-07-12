@@ -17,6 +17,7 @@ test_that("is_html_renderable() rejects plain data (so it reaches other renderer
   expect_false(ihr("a plain string"))
   expect_false(ihr(42))
   expect_false(ihr(mtcars))                                 # data.frame -> DataTable branch
+  skip_if_not_installed("ggplot2")
   expect_false(ihr(ggplot2::ggplot(mtcars)))               # ggplot -> renderPlot branch
   expect_false(ihr(structure(list(1, 2), class = "not_html")))
 })

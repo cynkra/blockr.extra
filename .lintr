@@ -1,0 +1,9 @@
+linters: linters_with_defaults(
+    object_name_linter = NULL,        # matches blockr.dm
+    object_usage_linter = NULL,       # matches blockr.dplyr / blockr.viz
+    object_length_linter = NULL,      # matches blockr.dm
+    line_length_linter = NULL,        # matches blockr.dplyr / blockr.viz
+    commented_code_linter = NULL,     # matches blockr.dplyr / blockr.viz
+    indentation_linter = NULL,        # matches blockr.dplyr / blockr.viz
+    brace_linter = NULL               # matches blockr.dm / blockr.ggplot
+  )

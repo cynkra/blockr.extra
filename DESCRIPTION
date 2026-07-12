@@ -34,6 +34,7 @@ Imports:
     DT,
     gt
 Suggests:
+    ggplot2,
     testthat (>= 3.0.0)
 Remotes:
     BristolMyersSquibb/blockr.core,
