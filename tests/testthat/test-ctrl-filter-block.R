@@ -33,10 +33,20 @@ test_that("the wiring inputs sit behind the gear, not in the resting surface", {
     )$html
   )
 
+  # The design-system band (blockr.dplyr / blockr.viz), not bespoke chrome:
+  # a .blockr-gear-btn toggling an in-flow .blockr-settings band of
+  # .blockr-popover-input fields. Closed by default (the band's CSS hides it
+  # until --open), so the receipt is what a non-building user sees.
   expect_match(ui, "blockr-gear-btn")
-  expect_match(ui, "blockr-gear-section")
-  # Closed by default: the receipt is what a non-building user sees.
-  expect_match(ui, "display: none;", fixed = TRUE)
+  # The band element itself carries no --open class (only the gear's onclick
+  # mentions it, to toggle it).
+  expect_match(ui, 'class="blockr-settings blockr-settings--beak"', fixed = TRUE)
+  expect_match(ui, "blockr-settings__grid", fixed = TRUE)
+  expect_match(ui, "blockr-popover-input", fixed = TRUE)
+
+  # Commit on blur / Enter: a per-keystroke report would ctrl_send() at every
+  # half-typed target id.
+  expect_match(ui, 'data-update-on="blur"', fixed = TRUE)
 })
 
 test_that("an unconfigured block claims nothing (passes through, no error)", {

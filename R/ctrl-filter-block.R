@@ -164,46 +164,59 @@ new_ctrl_filter_block <- function(target = "", table = "", columns = character()
       ns <- shiny::NS(id)
 
       shiny::tagList(
-        # Gear chrome (.blockr-gear-*), shared with the function block's editor.
-        code_block_css_dep(),
+        # The shared design-system layer: .blockr-gear-btn, .blockr-popover-
+        # label / -input (blockr.dplyr), and the settings band itself.
+        blockr.dplyr::blockr_blocks_css_dep(),
+        settings_band_dep(),
 
         shiny::div(
-          class = "ctrl-filter-block",
+          class = "block-container",
 
-          # Wiring is a BUILDER's concern: it lives behind the gear, in an
-          # in-flow band that pushes the receipt down while open (the design
-          # system's variant B). A user just reading the board sees the
-          # receipt, which is the block's whole point.
-          gear_settings_ui(
-            ns,
-            id = "settings",
+          # Wiring is a BUILDER's concern, so it lives behind the gear. The
+          # band is in flow (variant B): opening it pushes the receipt down
+          # rather than floating over it. A user just reading the board sees
+          # only the receipt, which is the block's whole point.
+          shiny::div(
+            class = "blockr-gear-header",
+            shiny::tags$button(
+              id = ns("gear"),
+              type = "button",
+              class = "blockr-gear-btn",
+              title = "Settings",
+              onclick = sprintf(
+                paste0(
+                  "(function(){var b=document.getElementById('%s');",
+                  "var p=document.getElementById('%s');",
+                  "var open=p.classList.toggle('blockr-settings--open');",
+                  "b.classList.toggle('blockr-gear-active',open);})();"
+                ),
+                ns("gear"), ns("settings")
+              ),
+              htmltools::HTML(gear_svg())
+            )
+          ),
+
+          shiny::div(
+            id = ns("settings"),
+            # --beak: the open band grows a notch pointing at the gear.
+            class = "blockr-settings blockr-settings--beak",
+            shiny::div(class = "blockr-settings__title", "Settings"),
             shiny::div(
-              class = "block-input-wrapper",
-              shiny::textInput(
-                ns("target"),
-                "Target block",
-                value = target,
-                placeholder = "e.g. cohort_filter"
-              )
-            ),
-            shiny::div(
-              class = "block-input-wrapper",
-              shiny::textInput(
-                ns("table"),
-                "Table",
-                value = table,
-                placeholder = "e.g. adsl"
-              )
-            ),
-            # Only needed upstream of a chart / tile, whose drilled output
-            # carries no ARD identity to read the claim off.
-            shiny::div(
-              class = "block-input-wrapper",
-              shiny::textInput(
-                ns("columns"),
-                "Claim columns (chart / tile only)",
-                value = paste(columns, collapse = ", "),
-                placeholder = "e.g. SEX, ARM — leave empty for tables"
+              class = "blockr-settings__grid",
+              band_field(
+                ns("target"), "Target block", target,
+                "e.g. cohort_filter"
+              ),
+              band_field(
+                ns("table"), "Table", table,
+                "e.g. adsl"
+              ),
+              # Only needed upstream of a chart / tile, whose drilled output
+              # carries no ARD identity to read the claim off.
+              band_field(
+                ns("columns"), "Claim columns (chart / tile only)",
+                paste(columns, collapse = ", "),
+                "e.g. SEX, ARM \u2014 leave empty for tables"
               )
             )
           ),
@@ -219,53 +232,57 @@ new_ctrl_filter_block <- function(target = "", table = "", columns = character()
   )
 }
 
-#' A gear-toggled settings band.
+#' One field in the settings band.
 #'
-#' The generic sibling of [gear_editor_ui()]: same chrome (the standard
-#' `.blockr-gear-btn`, an in-flow `.blockr-gear-section` that pushes the content
-#' below it down), but it holds plain inputs rather than the code editor, so
-#' there is no CodeMirror to re-measure on reveal.
+#' The design-system text field (`.blockr-popover-label` + `.blockr-popover-input`,
+#' blockr.dplyr's `blockr-blocks.css`) rather than a stock `shiny::textInput()`,
+#' which renders Bootstrap chrome the band is not styled for.
 #'
-#' @param ns Namespace function.
-#' @param ... Contents of the band.
-#' @param id Element id suffix for the section.
-#' @param title Tooltip on the gear button.
+#' `data-update-on="blur"` is load-bearing, not cosmetic: Shiny's text binding
+#' otherwise reports **every keystroke**, and each report would fire a
+#' [ctrl_send()] at a half-typed target ("c", "co", "coh", ...) -- each one a
+#' board update against a block id that does not exist, each one a user-facing
+#' rejection notification. Committing on blur / Enter is the same
+#' commit-on-Enter contract the design system settled on for text fields (the
+#' Enter chip, `Blockr.textCommit`); the chip itself needs a JS-driven block,
+#' which this one is not.
+#'
+#' @param id Input id (already namespaced).
+#' @param label Field label.
+#' @param value Initial value.
+#' @param placeholder Placeholder text.
 #' @noRd
-gear_settings_ui <- function(ns, ..., id = "settings", title = "Settings") {
-
-  sec_id <- ns(id)
-  btn_id <- ns(paste0(id, "-gear-btn"))
-
+band_field <- function(id, label, value, placeholder = NULL) {
   shiny::div(
-    class = "blockr-gear-editor",
-    shiny::div(
-      class = "blockr-gear-header",
-      shiny::tags$button(
-        id = btn_id,
-        type = "button",
-        class = "blockr-gear-btn",
-        title = title,
-        onclick = sprintf(
-          paste0(
-            "(function(){var s=document.getElementById('%s');",
-            "var b=document.getElementById('%s');",
-            "var open=s.style.display!=='none';",
-            "s.style.display=open?'none':'block';",
-            "b.classList.toggle('blockr-gear-active',!open);})();"
-          ),
-          sec_id, btn_id
-        ),
-        htmltools::HTML(gear_svg())
-      )
-    ),
-    shiny::div(
-      id = sec_id,
-      class = "blockr-gear-section",
-      style = "display: none;",
-      ...
+    class = "blockr-settings__field",
+    shiny::tags$label(class = "blockr-popover-label", `for` = id, label),
+    shiny::tags$input(
+      id = id,
+      type = "text",
+      class = "blockr-popover-input",
+      value = value,
+      placeholder = placeholder,
+      `data-update-on` = "blur"
     )
   )
 }
+
+#' The settings band's CSS.
+#'
+#' Vendored copy of the canonical `blockr.viz/inst/css/settings-band.css`, per
+#' the design-system convention (blockr.dplyr / ggplot / io carry the same
+#' copy). blockr.dplyr's own `settings_band_dep()` is internal, so it cannot be
+#' reused directly; the shared layer lifts into blockr.ui with the migration.
+#'
+#' @noRd
+settings_band_dep <- memoise0(function() {
+  htmltools::htmlDependency(
+    name = "blockr-extra-settings-band",
+    version = as.character(utils::packageVersion("blockr.extra")),
+    src = system.file("css", package = "blockr.extra"),
+    stylesheet = "settings-band.css"
+  )
+})
 
 # "SEX, ARM" -> c("SEX", "ARM"); "" -> character()
 split_columns <- function(x) {
