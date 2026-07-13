@@ -144,8 +144,12 @@ new_ctrl_filter_block <- function(target = "", table = "", columns = character()
 
           list(
             # The drilled subset passes straight through: this block sends a
-            # control message, it does not transform data.
-            expr = shiny::reactive(quote(data)),
+            # control message, it does not transform data. The expr must be a
+            # CALL (blockr.core asserts `typeof(exprs) == "language"`), so the
+            # identity is `base::identity(data)` -- a bare `quote(data)` is a
+            # symbol and wedges the block. Self-qualified, like every emitted
+            # expr.
+            expr = shiny::reactive(quote(base::identity(data))),
             state = list(
               target = r_target,
               table = r_table,
@@ -160,10 +164,19 @@ new_ctrl_filter_block <- function(target = "", table = "", columns = character()
       ns <- shiny::NS(id)
 
       shiny::tagList(
+        # Gear chrome (.blockr-gear-*), shared with the function block's editor.
+        code_block_css_dep(),
+
         shiny::div(
           class = "ctrl-filter-block",
-          shiny::div(
-            class = "ctrl-filter-config",
+
+          # Wiring is a BUILDER's concern: it lives behind the gear, in an
+          # in-flow band that pushes the receipt down while open (the design
+          # system's variant B). A user just reading the board sees the
+          # receipt, which is the block's whole point.
+          gear_settings_ui(
+            ns,
+            id = "settings",
             shiny::div(
               class = "block-input-wrapper",
               shiny::textInput(
@@ -194,6 +207,8 @@ new_ctrl_filter_block <- function(target = "", table = "", columns = character()
               )
             )
           ),
+
+          # The resting surface.
           shiny::uiOutput(ns("receipt"))
         )
       )
@@ -201,6 +216,54 @@ new_ctrl_filter_block <- function(target = "", table = "", columns = character()
     class = "ctrl_filter_block",
     allow_empty_state = c("target", "table", "columns", "label"),
     ...
+  )
+}
+
+#' A gear-toggled settings band.
+#'
+#' The generic sibling of [gear_editor_ui()]: same chrome (the standard
+#' `.blockr-gear-btn`, an in-flow `.blockr-gear-section` that pushes the content
+#' below it down), but it holds plain inputs rather than the code editor, so
+#' there is no CodeMirror to re-measure on reveal.
+#'
+#' @param ns Namespace function.
+#' @param ... Contents of the band.
+#' @param id Element id suffix for the section.
+#' @param title Tooltip on the gear button.
+#' @noRd
+gear_settings_ui <- function(ns, ..., id = "settings", title = "Settings") {
+
+  sec_id <- ns(id)
+  btn_id <- ns(paste0(id, "-gear-btn"))
+
+  shiny::div(
+    class = "blockr-gear-editor",
+    shiny::div(
+      class = "blockr-gear-header",
+      shiny::tags$button(
+        id = btn_id,
+        type = "button",
+        class = "blockr-gear-btn",
+        title = title,
+        onclick = sprintf(
+          paste0(
+            "(function(){var s=document.getElementById('%s');",
+            "var b=document.getElementById('%s');",
+            "var open=s.style.display!=='none';",
+            "s.style.display=open?'none':'block';",
+            "b.classList.toggle('blockr-gear-active',!open);})();"
+          ),
+          sec_id, btn_id
+        ),
+        htmltools::HTML(gear_svg())
+      )
+    ),
+    shiny::div(
+      id = sec_id,
+      class = "blockr-gear-section",
+      style = "display: none;",
+      ...
+    )
   )
 }
 
