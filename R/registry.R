@@ -15,7 +15,8 @@ register_extra_blocks <- function() {
       "new_compare_block",
       "new_search_block",
       "new_latest_block",
-      "new_labeler_block"
+      "new_labeler_block",
+      "new_ctrl_filter_block"
     ),
     name = c(
       "Function block",
@@ -25,7 +26,8 @@ register_extra_blocks <- function() {
       "Compare",
       "Search",
       "Latest",
-      "Labeler"
+      "Labeler",
+      "Cohort filter sender"
     ),
     description = c(
       "Transform data with a custom R function in a CodeMirror editor (syntax highlighting, autocomplete, inline AI diff). UI auto-generated from function arguments.",
@@ -35,9 +37,11 @@ register_extra_blocks <- function() {
       "Compare two data frames on key columns and compute diff metrics on measurement columns.",
       "Filter rows by case-insensitive substring match across all columns.",
       "Forward the value of whichever variadic input most recently changed (latest-wins merge / switch). Bridges multiple drill-down charts into one downstream block.",
-      "Add or edit column labels (the `attr(col, \"label\")` attribute shown in column pickers and table headers). Empty label removes it."
+      "Add or edit column labels (the `attr(col, \"label\")` attribute shown in column pickers and table headers). Empty label removes it.",
+      "Push the drilled-to condition of an upstream table, chart or tile into a value filter block elsewhere on the board (no data link). Click a level to narrow the cohort, re-click to clear. Passes its input through unchanged."
     ),
     category = c(
+      "transform",
       "transform",
       "transform",
       "transform",
@@ -55,7 +59,8 @@ register_extra_blocks <- function() {
       "arrow-left-right",
       "search",
       "shuffle",
-      "tag"
+      "tag",
+      "funnel"
     ),
     guidance = c(
       # new_function_block:
@@ -91,6 +96,15 @@ register_extra_blocks <- function() {
         "Set `labels` to a named list mapping existing column names to",
         "human-readable label strings. Use an empty string to remove a",
         "column's label. Columns not present in the data are ignored."
+      ),
+      # new_ctrl_filter_block:
+      paste(
+        "Set `target` to the block id of the value filter block to control,",
+        "and `table` to the table in its `dm` the conditions apply to.",
+        "Leave `columns` empty when the upstream is a table or summary block",
+        "(its drilled output carries the ARD identity the claim is read off).",
+        "Set `columns` to the chart's drill column(s) when the upstream is a",
+        "chart or tile, whose drilled output is a plain row subset."
       )
     ),
     arguments = list(
@@ -145,6 +159,28 @@ register_extra_blocks <- function() {
         labels = new_block_arg(
           "Named list mapping column names to label strings. An empty string removes the column's label.",
           example = 'list(mpg = "Miles per gallon", cyl = "Number of cylinders")'
+        )
+      ),
+      # new_ctrl_filter_block:
+      new_block_args(
+        target = new_block_arg(
+          "Block id of the value filter block to send the drilled cohort to. Empty means not configured: the block passes data through and sends nothing.",
+          example = "cohort_filter",
+          type = arg_string()
+        ),
+        table = new_block_arg(
+          "Name of the table in the target filter's `dm` that the conditions apply to.",
+          example = "adsl",
+          type = arg_string()
+        ),
+        columns = new_block_arg(
+          "Source columns a click may claim. Leave empty when the upstream is a table or summary block; set it to the chart's drill column(s) when the upstream is a chart or tile.",
+          example = 'c("SEX")'
+        ),
+        label = new_block_arg(
+          "Name of the target as shown on the receipt. Defaults to the target block id.",
+          example = "Cohort",
+          type = arg_string()
         )
       )
     ),
