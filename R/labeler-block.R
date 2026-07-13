@@ -179,7 +179,7 @@ as_label_list <- function(labels) {
 
 #' HTML dependencies for the labeler block's own JS + CSS
 #' @noRd
-labeler_block_dep <- function() {
+labeler_block_dep <- memoise0(function() {
   htmltools::tagList(
     htmltools::htmlDependency(
       name = "labeler-block-js",
@@ -194,4 +194,4 @@ labeler_block_dep <- function() {
       stylesheet = "labeler-block.css"
     )
   )
-}
+})

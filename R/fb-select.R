@@ -17,14 +17,14 @@ NULL
 #'
 #' @return An [htmltools::htmlDependency()].
 #' @keywords internal
-fb_select_dep <- function() {
+fb_select_dep <- memoise0(function() {
   htmltools::htmlDependency(
     name = "blockr-extra-fb-select",
     version = as.character(utils::packageVersion("blockr.extra")),
     src = system.file("js", package = "blockr.extra"),
     script = "fb-select.js"
   )
-}
+})
 
 
 #' All assets needed for a function-block select field

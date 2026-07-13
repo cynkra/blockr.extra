@@ -264,6 +264,16 @@ import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
     el._cmMergeActive = false;
   };
 
+  // Build the editor for a mount if it doesn't exist yet. Deferred mounts
+  // (see initialize) come through here on reveal; the observer is one-shot.
+  const ensureView = (el) => {
+    if (!el._cmView) {
+      if (el._cmObserver) { el._cmObserver.disconnect(); el._cmObserver = null; }
+      el._cmView = makeView(el);
+    }
+    return el._cmView;
+  };
+
   const binding = new Shiny.InputBinding();
   Object.assign(binding, {
     find: function (scope) {
@@ -275,12 +285,33 @@ import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
       el._cmSelfWrite = false;
       el._cmMergeActive = false;
       el._cmCompletions = [];
-      el._cmView = makeView(el);
       // Report the initial value so the server input is populated from mount.
-      Shiny.setInputValue(el.id, el._cmView.state.doc.toString());
+      Shiny.setInputValue(el.id, el.getAttribute("data-value") || "");
+      // The editor usually mounts inside a closed (display:none) gear section
+      // the user may never open, and a full CodeMirror instance per block is
+      // the one real per-block startup cost. Build eagerly only when mounted
+      // visible; otherwise defer to reveal — the gear toggle's
+      // Blockr.Code.refresh call, or the IntersectionObserver for any other
+      // reveal path. Until then the binding answers from data-value, and a
+      // `blockr-code-set` (AI write) materializes the editor itself.
+      if (el.getClientRects().length > 0) {
+        ensureView(el);
+        return;
+      }
+      if (typeof IntersectionObserver !== "undefined") {
+        const obs = new IntersectionObserver((entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            ensureView(el).requestMeasure();
+          }
+        });
+        obs.observe(el);
+        el._cmObserver = obs;
+      }
     },
     getValue: function (el) {
-      return el._cmView ? el._cmView.state.doc.toString() : "";
+      return el._cmView
+        ? el._cmView.state.doc.toString()
+        : (el.getAttribute("data-value") || "");
     },
     subscribe: function (el, callback) {
       el._cmCallback = callback;
@@ -295,9 +326,13 @@ import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
   Shiny.inputBindings.register(binding, "blockr.extra.code");
 
   // R -> JS: replace the document (+ optionally enter/exit the inline diff).
+  // An external write may target a still-deferred mount (gear never opened) —
+  // materialize it so the diff/run state machine has a real editor to act on.
   Shiny.addCustomMessageHandler("blockr-code-set", (msg) => {
     const el = document.getElementById(msg.id);
-    if (el) setCode(el, msg.code, msg.original);
+    if (!el) return;
+    ensureView(el);
+    setCode(el, msg.code, msg.original);
   });
 
   // R -> JS: Accept all — keep the AI code (already live), just close the diff.
@@ -328,12 +363,15 @@ import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
       : (msg.columns == null ? [] : [msg.columns]);
   });
 
-  // CodeMirror mis-measures when created hidden. Re-measure when revealed.
+  // Reveal hook (called by the gear toggle): build the deferred editor on
+  // first open, and re-measure — CodeMirror mis-measures when created hidden.
   window.Blockr = window.Blockr || {};
   window.Blockr.Code = {
     refresh: (id) => {
       const el = document.getElementById(id);
-      if (el && el._cmView) el._cmView.requestMeasure();
+      if (el && el.classList.contains("blockr-code")) {
+        ensureView(el).requestMeasure();
+      }
     }
   };
 })();

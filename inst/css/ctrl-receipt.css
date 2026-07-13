@@ -1,0 +1,81 @@
+/* ctrl_receipt() — the status card a sender block returns as its output.
+   Reads as a receipt for what THIS block last pushed over the control
+   channel: past tense, never a claim about the target's current state (the
+   sender has no back-edge to the target and must not grow one).
+   Tokens per blockr.docs/design-system/target; literals are fallbacks. */
+
+.ctrl-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: var(--blockr-radius-md, 6px);
+  background: var(--blockr-color-primary-bg, #eff6ff);
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-color-text-primary, #111827);
+}
+
+/* Nothing sent yet: no tint, no emphasis — an empty state, not a status. */
+.ctrl-receipt--idle {
+  background: var(--blockr-color-bg-subtle, #f9fafb);
+  color: var(--blockr-color-text-muted, #6b7280);
+}
+
+.ctrl-receipt-head {
+  font-weight: var(--blockr-font-weight-semibold, 600);
+  color: var(--blockr-color-text-secondary, #374151);
+}
+
+.ctrl-receipt--idle .ctrl-receipt-head {
+  font-weight: var(--blockr-font-weight-medium, 500);
+  color: var(--blockr-color-text-muted, #6b7280);
+}
+
+.ctrl-receipt-target {
+  color: var(--blockr-color-primary, #2563eb);
+}
+
+/* Chips mirror .blockr-pill (blockr.dplyr) so a sent condition and the pill
+   it lands on in the target filter read as the same object. */
+.ctrl-receipt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ctrl-receipt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--blockr-control-h-xs, 26px);
+  padding: 2px 8px;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: var(--blockr-radius-sm, 4px);
+  background: var(--blockr-color-bg-subtle, #f9fafb);
+  font-size: 11px;
+  font-weight: var(--blockr-font-weight-medium, 500);
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.ctrl-receipt-name {
+  color: var(--blockr-color-text-muted, #6b7280);
+}
+
+.ctrl-receipt-op {
+  color: var(--blockr-color-text-subtle, #9ca3af);
+}
+
+.ctrl-receipt-value {
+  color: var(--blockr-color-text-primary, #111827);
+  font-weight: var(--blockr-font-weight-semibold, 600);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctrl-receipt-hint {
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-color-text-muted, #6b7280);
+}
