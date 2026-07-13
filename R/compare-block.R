@@ -158,7 +158,7 @@ new_compare_block <- function(
 
 #' HTML dependency for the compare block's JS + CSS
 #' @noRd
-compare_block_dep <- function() {
+compare_block_dep <- memoise0(function() {
   htmltools::tagList(
     htmltools::htmlDependency(
       name = "compare-block-js",
@@ -173,7 +173,7 @@ compare_block_dep <- function() {
       stylesheet = "compare-block.css"
     )
   )
-}
+})
 
 #' Compare two data frames
 #'

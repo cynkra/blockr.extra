@@ -98,11 +98,11 @@ receipt_hint <- function(hint) {
   htmltools::div(class = "ctrl-receipt-hint", hint)
 }
 
-ctrl_receipt_dep <- function() {
+ctrl_receipt_dep <- memoise0(function() {
   htmltools::htmlDependency(
     name = "blockr-ctrl-receipt",
     version = as.character(utils::packageVersion("blockr.extra")),
     src = system.file("css", package = "blockr.extra"),
     stylesheet = "ctrl-receipt.css"
   )
-}
+})

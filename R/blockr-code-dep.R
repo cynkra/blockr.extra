@@ -6,22 +6,22 @@
 #'
 #' @return An [htmltools::htmlDependency()].
 #' @keywords internal
-blockr_code_dep <- function() {
+blockr_code_dep <- memoise0(function() {
   htmltools::htmlDependency(
     name = "blockr-code",
     version = as.character(utils::packageVersion("blockr.extra")),
     src = system.file("js", package = "blockr.extra"),
     script = "blockr-code.js"
   )
-}
+})
 
 #' @rdname blockr_code_dep
 #' @keywords internal
-code_block_css_dep <- function() {
+code_block_css_dep <- memoise0(function() {
   htmltools::htmlDependency(
     name = "blockr-code-css",
     version = as.character(utils::packageVersion("blockr.extra")),
     src = system.file("css", package = "blockr.extra"),
     stylesheet = "code-block.css"
   )
-}
+})
