@@ -3,7 +3,7 @@
 #' Registers the experimental function blocks with blockr.
 #'
 #' @export
-#' @importFrom blockr.core register_blocks new_block_args new_block_arg
+#' @importFrom blockr.core register_blocks new_arg_specs new_arg_spec
 #'   arg_string
 register_extra_blocks <- function() {
   blockr.core::register_blocks(
@@ -95,8 +95,8 @@ register_extra_blocks <- function() {
     ),
     arguments = list(
       # new_function_block:
-      new_block_args(
-        fn = new_block_arg(
+      new_arg_specs(
+        fn = new_arg_spec(
           "A string of R code that evaluates to a function. The function must have 'data' as its first argument (the input data frame). Additional arguments with defaults become UI widgets.",
           # MULTI-LINE and indented (anchors readable output, not one-liners),
           # demonstrates BOTH a c() single-select (sort_by) AND a list()
@@ -121,8 +121,8 @@ register_extra_blocks <- function() {
         )
       ),
       # new_function_var_block:
-      new_block_args(
-        fn = new_block_arg(
+      new_arg_specs(
+        fn = new_arg_spec(
           "A string of R code that evaluates to a function. The function must have '...' as its first argument (variadic data frame inputs). Additional arguments with defaults become UI widgets.",
           example = "function(..., .id = NULL) { dplyr::bind_rows(..., .id = .id) }",
           type = arg_string()
@@ -141,8 +141,8 @@ register_extra_blocks <- function() {
       # new_labeler_block:
       # `labels` is an arbitrary-key map (column name -> label), which has
       # no JSON-Schema subset — left untyped like blockr.dplyr's `renames`.
-      new_block_args(
-        labels = new_block_arg(
+      new_arg_specs(
+        labels = new_arg_spec(
           "Named list mapping column names to label strings. An empty string removes the column's label.",
           example = 'list(mpg = "Miles per gallon", cyl = "Number of cylinders")'
         )
