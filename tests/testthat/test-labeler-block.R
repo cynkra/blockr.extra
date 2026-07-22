@@ -49,6 +49,11 @@ test_that("make_labeler_expr builds a set_column_labels call", {
 test_that("make_labeler_expr with no labels is the identity", {
   for (labels in list(list(), NULL, character())) {
     expr <- blockr.extra:::make_labeler_expr(labels)
+    # A freshly added block has no labels; block_server feeds the expr
+    # through exprs_to_lang(), which rejects a bare symbol — the expr must
+    # be a call (regression: quote(data) crashed the block on add).
+    expect_true(is.call(expr))
+    expect_identical(blockr.core:::exprs_to_lang(expr), expr)
     expect_identical(eval_bquoted(expr, mtcars), mtcars)
   }
 })

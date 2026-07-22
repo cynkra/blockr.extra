@@ -145,8 +145,10 @@ set_column_labels <- function(data, labels = character()) {
 make_labeler_expr <- function(labels = list()) {
   labels <- as_label_list(labels)
 
+  # Must be a call, not the bare `data` symbol: exprs_to_lang() in
+  # blockr.core rejects symbols, and a freshly added block has no labels.
   if (length(labels) == 0) {
-    return(quote(data))
+    return(blockr.core::bbquote(.(data)))
   }
 
   bquote(blockr.extra::set_column_labels(data, .(unlist(labels))))
