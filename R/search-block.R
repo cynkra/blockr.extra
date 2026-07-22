@@ -15,7 +15,7 @@
 #' if (interactive()) {
 #'   library(blockr.core)
 #'   library(blockr.extra)
-#'   options(blockr.html_table_preview = TRUE)
+#'   options(blockr.tabular_display = blockr.ui::html_table_display)
 #'   serve(new_search_block(), data = list(data = iris))
 #' }
 #'

@@ -22,7 +22,7 @@ pkgload::load_all("blockr.extra")
 library(shiny)
 
 options(
-  blockr.html_table_preview = TRUE,
+  blockr.tabular_display = blockr.ui::html_table_display,
   blockr.ai_model = "gpt-5.2",
   shiny.port = 3845L,
   shiny.host = "0.0.0.0"

@@ -1,6 +1,6 @@
 Package: blockr.extra
 Title: Extra Experimental Blocks for blockr
-Version: 0.0.27
+Version: 0.0.28
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",
@@ -13,7 +13,7 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
-    blockr.core,
+    blockr.core (>= 0.1.4),
     blockr.dplyr,
     blockr.ui,
     broom,

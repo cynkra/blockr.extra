@@ -117,10 +117,18 @@ is_html_renderable <- function(x) {
 #' @return A shiny.render.function (renderUI)
 #' @noRd
 render_dynamic_output <- function(result, block, session) {
-  # Data frames with the preview option on render via the shared blockr.ui
-  # table preview (a complete renderUI with its own sort/page handling).
+  # Data frames follow the board's chosen tabular display, so a function block
+  # previews its result the same way the data and transform blocks around it
+  # do. Only the HTML table can be honored here, and the reason is the
+  # container: this function is the render half of a FIXED `uiOutput` (see
+  # block_ui.function_block), while a blockr.core `tabular_display` also picks
+  # its own container -- `minimal_display` pairs a renderText with a
+  # verbatimTextOutput, and shipping that text into a uiOutput binding renders
+  # nothing. blockr.ui's display is the one whose renderer is already a
+  # renderUI, so it drops straight in; every other display falls back to DT
+  # below rather than being routed through a container it did not ask for.
   if (inherits(result, "data.frame") &&
-      isTRUE(getOption("blockr.html_table_preview", FALSE))) {
+      inherits(blockr.core::tabular_display(), "html_table_display")) {
     return(blockr.ui::html_table_result(result, block, session))
   }
   shiny::renderUI({
@@ -149,7 +157,7 @@ render_dynamic_output <- function(result, block, session) {
       })
       shiny::plotOutput(session$ns(output_id))
     } else if (inherits(result, "data.frame")) {
-      # preview-option case handled above via blockr.ui::html_table_result()
+      # html_table_display case handled above via blockr.ui::html_table_result()
       dt_datatable(result, block, session)
     } else {
       # Fallback: print method as preformatted text

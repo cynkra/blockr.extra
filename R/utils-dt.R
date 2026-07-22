@@ -22,7 +22,22 @@ dt_datatable <- function(result, block, session) {
     if (is.na(dat_row)) show_row > page else min(dat_row, show_row) > page
   }
 
-  default_opts <- blockr.core::board_options(block)
+  # DT's three options are no longer guaranteed to be anywhere. Since
+  # blockr.core #292 a data or transform block contributes exactly the board
+  # options the active `tabular_display` declares, so `n_rows`, `page_size`
+  # and `filter_rows` are all absent unless that display is `dt_display` --
+  # and a function block never carried them at all, being built on new_block()
+  # (its board_options() are just the four defaults). Without a fallback,
+  # get_board_option_or_default() reaches board_option_value(NULL) and errors,
+  # taking the whole preview with it. Append the ctor defaults so there is
+  # always something to land on; combine_board_options() keeps the first of a
+  # duplicated id, so a board that does carry them still wins.
+  default_opts <- blockr.core::combine_board_options(
+    blockr.core::board_options(block),
+    blockr.core::new_n_rows_option(),
+    blockr.core::new_page_size_option(),
+    blockr.core::new_filter_rows_option()
+  )
 
   rows <- blockr.core::get_board_option_or_default("n_rows", default_opts, session)
   page <- blockr.core::get_board_option_or_default("page_size", default_opts, session)
