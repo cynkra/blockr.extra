@@ -78,14 +78,33 @@ new_search_block <- function(string = "", ...) {
 #'
 #' @noRd
 make_search_expr <- function(string) {
+
+  # The data SLOT -- the literal `.(data)` placeholder -- never a free `data`
+  # symbol. The block declares `expr_type = "bquoted"`, so blockr substitutes
+  # only `.()` terms and does NOT wrap the expression in `with(args, ...)`.
+  # A bare `data` therefore works in the app (the runtime env binds it) and
+  # silently breaks every EXPORT: blockr.outline emits the symbol verbatim,
+  # it resolves up the search path to `utils::data` (a function), and each
+  # downstream block dies with "no applicable method for 'filter' applied to
+  # an object of class 'function'".
+  #
+  # Built by hand rather than through blockr.core::bbquote(): the expression
+  # below DEFINES A FUNCTION, and bbquote()'s splice pass deletes a function
+  # definition's NULL srcref slot -- present whenever the code was parsed
+  # without srcrefs, i.e. from an INSTALLED package. That crashes with
+  # "'names' attribute [4] must be the same length as the vector [3]" in
+  # production while passing every load_all() dev session.
+  dat <- call(".", as.name("data"))
+
   if (!nzchar(trimws(string))) {
     # dplyr::filter() with no conditions returns the data unchanged;
     # keeps the expression a language object (not a bare symbol).
-    return(quote(dplyr::filter(data)))
+    return(bquote(dplyr::filter(.(d)), list(d = dat)))
   }
+
   bquote(
     dplyr::filter(
-      data,
+      .(d),
       dplyr::if_any(
         dplyr::everything(),
         function(.col) stringr::str_detect(
@@ -94,6 +113,6 @@ make_search_expr <- function(string) {
         )
       )
     ),
-    list(s = string)
+    list(d = dat, s = string)
   )
 }

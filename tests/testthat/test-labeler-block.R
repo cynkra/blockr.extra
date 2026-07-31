@@ -1,29 +1,4 @@
-# Resolve a bquoted expression the way blockr.core does and evaluate it.
-eval_bquoted <- function(expr, df) {
-  expr <- do.call(bquote, list(expr, list(data = as.name("data"))))
-  eval(expr, list(data = df))
-}
-
-# TRUE when the expression carries a `data` symbol that is NOT wrapped in the
-# `.()` slot. Note that eval_bquoted() above passes either way -- the eval env
-# binds `data` -- which is exactly why the defect is invisible at runtime and
-# only breaks exported code. all.vars() cannot be used for this: the slot
-# `.(data)` contains a `data` symbol too, so it reports both forms.
-has_bare_data <- function(e) {
-  if (is.name(e)) {
-    return(identical(as.character(e), "data"))
-  }
-  if (!is.call(e) && !is.pairlist(e)) {
-    return(FALSE)
-  }
-  # `.(data)` is the slot, not a bare reference.
-  if (is.call(e) && identical(e[[1L]], as.name(".")) && length(e) == 2L) {
-    return(FALSE)
-  }
-  # Single-bracket indexing keeps NULL elements (a function definition's
-  # srcref is NULL when parsed without srcrefs, i.e. from an installed pkg).
-  any(vapply(as.list(e), has_bare_data, logical(1L)))
-}
+# eval_bquoted(), has_bare_data() and data_slot() live in helper-bquoted.R.
 
 # --- set_column_labels() ------------------------------------------------
 
@@ -88,10 +63,9 @@ test_that("the emitted expression carries the data SLOT, never a bare `data`", {
     expect_false(has_bare_data(expr))
   }
 
-  slot <- call(".", as.name("data"))
-  expect_identical(blockr.extra:::make_labeler_expr(list()), slot)
+  expect_identical(blockr.extra:::make_labeler_expr(list()), data_slot())
   expect_identical(
-    blockr.extra:::make_labeler_expr(list(mpg = "MPG"))[[2L]], slot
+    blockr.extra:::make_labeler_expr(list(mpg = "MPG"))[[2L]], data_slot()
   )
 
   # The guard must actually be able to fail -- the pre-fix shape.
