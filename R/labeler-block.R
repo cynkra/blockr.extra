@@ -145,13 +145,27 @@ set_column_labels <- function(data, labels = character()) {
 make_labeler_expr <- function(labels = list()) {
   labels <- as_label_list(labels)
 
+  # The data SLOT -- the literal `.(data)` placeholder -- never a free `data`
+  # symbol. The block declares `expr_type = "bquoted"`, so blockr substitutes
+  # only `.()` terms and does NOT wrap the expression in `with(args, ...)`.
+  # A bare `data` therefore works in the app (the runtime env binds it) and
+  # silently breaks every EXPORT: blockr.outline emits the symbol verbatim,
+  # it resolves up the search path to `utils::data` (a function), and each
+  # downstream block dies with "no applicable method for 'filter' applied to
+  # an object of class 'function'".
+  dat <- call(".", as.name("data"))
+
   # Must be a call, not the bare `data` symbol: exprs_to_lang() in
   # blockr.core rejects symbols, and a freshly added block has no labels.
+  # The slot is itself a call, so it satisfies that too.
   if (length(labels) == 0) {
-    return(blockr.core::bbquote(.(data)))
+    return(dat)
   }
 
-  bquote(blockr.extra::set_column_labels(data, .(unlist(labels))))
+  bquote(
+    blockr.extra::set_column_labels(.(d), .(lbl)),
+    list(d = dat, lbl = unlist(labels))
+  )
 }
 
 #' Normalize a labels argument to a named list of strings
