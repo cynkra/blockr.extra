@@ -10,7 +10,6 @@
 #'
 #' @return A transform block of class `search_block`.
 #'
-#' @importFrom stringr str_detect fixed
 #' @examples
 #' if (interactive()) {
 #'   library(blockr.core)
@@ -102,17 +101,35 @@ make_search_expr <- function(string) {
     return(bquote(dplyr::filter(.(d)), list(d = dat)))
   }
 
+  # grepl() rather than stringr::str_detect(): this expression is read by
+  # humans in the generated report, so it should look like the filter someone
+  # would have written. grepl() coerces its input through as.character()
+  # itself -- factors, numerics and Dates all just work -- and takes
+  # `ignore.case` directly, which removes both the as.character() wrapper and
+  # the stringr::fixed(..., ignore_case = TRUE) dance the previous form
+  # needed. It also drops stringr from the generated code's dependencies.
   bquote(
     dplyr::filter(
       .(d),
       dplyr::if_any(
         dplyr::everything(),
-        function(.col) stringr::str_detect(
-          as.character(.col),
-          stringr::fixed(.(s), ignore_case = TRUE)
-        )
+        function(x) grepl(.(p), x, ignore.case = TRUE)
       )
     ),
-    list(d = dat, s = string)
+    list(d = dat, p = escape_regex(string))
   )
+}
+
+#' Escape regex metacharacters
+#'
+#' The search box means literal substring: typing `1.5` must not match `125`.
+#' `grepl()` is used in regex mode (its `fixed = TRUE` silently ignores
+#' `ignore.case`), so the search string is escaped instead. Ordinary terms
+#' come through untouched, which is what keeps the generated code readable.
+#'
+#' @param x A character string.
+#' @return `x` with regex metacharacters backslash-escaped.
+#' @noRd
+escape_regex <- function(x) {
+  gsub("([][{}().^$*+?|\\\\])", "\\\\\\1", x)
 }

@@ -36,7 +36,46 @@ test_that("non-empty string produces a filter expression with the search string"
   expect_match(s, "dplyr::filter")
   expect_match(s, "dplyr::if_any")
   expect_match(s, "BBD02")
-  expect_match(s, "ignore_case = TRUE")
+  expect_match(s, "ignore.case = TRUE")
+})
+
+test_that("the generated filter reads like one a person would write", {
+  # This expression is shown to humans in the exported report, so its shape
+  # is part of the contract: no as.character() wrapper, no stringr::fixed()
+  # dance -- grepl() coerces its input and takes ignore.case directly.
+  expr <- blockr.extra:::make_search_expr("BBD02")
+  resolved <- do.call(
+    bquote, list(expr, list(data = as.name("adae")))
+  )
+
+  expect_identical(
+    deparse1(resolved),
+    paste0(
+      "dplyr::filter(adae, dplyr::if_any(dplyr::everything(), ",
+      "function(x) grepl(\"BBD02\", x, ignore.case = TRUE)))"
+    )
+  )
+
+  expect_no_match(deparse1(resolved), "stringr", fixed = TRUE)
+  expect_no_match(deparse1(resolved), "as.character", fixed = TRUE)
+})
+
+test_that("regex metacharacters in the search string match literally", {
+  data <- data.frame(x = c("1.5", "125", "a(b)", "axb"))
+
+  # "1.5" must not match "125" -- the search box means substring, not regex.
+  expect_identical(
+    eval_bquoted(blockr.extra:::make_search_expr("1.5"), data)$x, "1.5"
+  )
+  expect_identical(
+    eval_bquoted(blockr.extra:::make_search_expr("a(b)"), data)$x, "a(b)"
+  )
+
+  # An ordinary term is emitted untouched, which is the readable case.
+  expect_match(
+    deparse1(blockr.extra:::make_search_expr("setosa")), "\"setosa\"",
+    fixed = TRUE
+  )
 })
 
 test_that("search expression filters rows on substring match", {

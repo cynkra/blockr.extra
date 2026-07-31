@@ -1,6 +1,6 @@
 Package: blockr.extra
 Title: Extra Experimental Blocks for blockr
-Version: 0.0.30
+Version: 0.0.31
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",
@@ -25,7 +25,6 @@ Imports:
     mirai,
     shiny,
     stats,
-    stringr,
     utils,
     DT
 Suggests:
