@@ -1,6 +1,6 @@
 Package: blockr.extra
 Title: Extra Experimental Blocks for blockr
-Version: 0.0.31
+Version: 0.0.32
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",
@@ -14,6 +14,7 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
     blockr.core (>= 0.1.4),
+    blockr.dock,
     blockr.dplyr,
     blockr.ui,
     broom,
@@ -33,6 +34,7 @@ Suggests:
     testthat (>= 3.0.0)
 Remotes:
     BristolMyersSquibb/blockr.core,
+    BristolMyersSquibb/blockr.dock,
     BristolMyersSquibb/blockr.dplyr,
     BristolMyersSquibb/blockr.ui
 Config/testthat/edition: 3
