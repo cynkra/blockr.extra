@@ -250,38 +250,68 @@
       return { entries, rowOf, rl };
     };
 
+    // Lane allocation. All out-edges of a block ride ONE lane -- its "bus" --
+    // which opens at the block's row and retires after its last consumer.
+    // A lane per EDGE (the git-commit-graph rule) is fine for a git history,
+    // where fan-out is two or three, but real boards are fan-out heavy: on the
+    // CDEX board one global filter feeds eight panels and the gutter grew to
+    // 17 lanes / 290px -- wider than the list it annotates. Bundling by
+    // producer is the metro-map reading (one line, consumers as stations along
+    // it) and holds the gutter to the number of producers open at a row: 6 on
+    // that same board. Fan-IN keeps its own hook per edge, so a merge still
+    // shows both parents arriving.
     const layout = (entries, rl, rowOf) => {
-      const lanes = [], laneOf = new Map(), edges = [], open = new Map();
+      const lanes = [], laneOf = new Map(), busOf = new Map(), edges = [];
       const firstFree = () => {
         for (let i = 0; i < lanes.length; i++) if (lanes[i] === null) return i;
         lanes.push(null);
         return lanes.length - 1;
       };
+      // the row after which a producer's bus carries nothing
+      const busEnd = new Map();
+      rl.forEach((l) => {
+        const r = rowOf.get(l.to);
+        if (r === undefined) return;
+        busEnd.set(l.from, Math.max(busEnd.get(l.from) ?? -1, r));
+      });
+
       entries.forEach((e) => {
-        const inEdges = rl
-          .filter((l) => l.to === e.id)
-          .sort((a, b) => (open.get(a.from + '>' + a.to) ?? 99) - (open.get(b.from + '>' + b.to) ?? 99));
-        let lane;
-        if (inEdges.length) {
-          lane = open.get(inEdges[0].from + '>' + inEdges[0].to) ?? firstFree();
-        } else {
-          lane = firstFree();
-        }
+        const ins = rl.filter((l) => l.to === e.id);
+        const outs = rl.filter((l) => l.from === e.id);
+
+        // sit on the leftmost parent bus -> a chain stays one straight line
+        const buses = ins
+          .map((l) => busOf.get(l.from))
+          .filter((x) => x !== undefined)
+          .sort((a, b) => a - b);
+        const onBus = buses.length > 0;
+        const lane = onBus ? buses[0] : firstFree();
+
         laneOf.set(e.id, lane);
-        inEdges.forEach((l) => {
-          const key = l.from + '>' + l.to;
-          const el = open.get(key);
-          if (el !== undefined) { edges.push({ from: l.from, to: l.to, lane: el }); lanes[el] = null; open.delete(key); }
+        lanes[lane] = 1;
+
+        ins.forEach((l) => edges.push({
+          from: l.from,
+          to: l.to,
+          lane: busOf.get(l.from) ?? lane
+        }));
+
+        // retire every bus whose last consumer is this row, BEFORE handing out
+        // this block's own bus: a straight chain then reuses its parent's lane
+        busOf.forEach((bl, src) => {
+          if ((busEnd.get(src) ?? -1) <= e.row) {
+            lanes[bl] = null;
+            busOf.delete(src);
+          }
         });
-        lanes[lane] = null;
-        const outs = rl
-          .filter((l) => l.from === e.id)
-          .sort((a, b) => (rowOf.get(a.to) ?? 999) - (rowOf.get(b.to) ?? 999));
-        outs.forEach((l, i) => {
-          const el = i === 0 && lanes[lane] === null ? lane : firstFree();
-          lanes[el] = 1;
-          open.set(l.from + '>' + l.to, el);
-        });
+
+        if (outs.length) {
+          const bus = onBus && lanes[lane] !== null ? firstFree() : lane;
+          lanes[bus] = 1;
+          busOf.set(e.id, bus);
+        } else if (!onBus) {
+          lanes[lane] = null;
+        }
       });
       return { laneOf, edges, nLanes: Math.max(1, lanes.length) };
     };
@@ -381,6 +411,25 @@
       svg.setAttribute('width', railW);
       svg.setAttribute('height', H);
 
+      // Siblings share their producer's bus, so their drawn paths overlap
+      // above the first consumer. Hovering has to stay unambiguous: each edge
+      // owns only the stretch of bus BELOW the previous consumer -- that band
+      // is where its ✕ appears and where the hover highlight fires.
+      const hitFrom = new Map();
+      const byFrom = new Map();
+      edges.forEach((e) => {
+        const arr = byFrom.get(e.from) || [];
+        arr.push(e);
+        byFrom.set(e.from, arr);
+      });
+      byFrom.forEach((arr, from) => {
+        arr.sort((a, b) => (rowOf.get(a.to) ?? 0) - (rowOf.get(b.to) ?? 0));
+        arr.forEach((e, i) => hitFrom.set(
+          e.from + '>' + e.to,
+          i === 0 ? rowOf.get(from) : rowOf.get(arr[i - 1].to)
+        ));
+      });
+
       edges.forEach((e) => {
         const rF = rowOf.get(e.from), rT = rowOf.get(e.to);
         const xF = laneX(laneOf.get(e.from)), xT = laneX(laneOf.get(e.to));
@@ -407,13 +456,22 @@
         p.dataset.from = e.from;
         p.dataset.to = e.to;
         svg.appendChild(p);
+        const rH = hitFrom.get(e.from + '>' + e.to) ?? rF;
+        const yH = Math.max(dotY(rH), yF);
+        const yIn2 = xE !== xT ? yT - PITCH : yT;
+        let dh = 'M' + xE + ',' + Math.min(yH, yIn2);
+        if (yIn2 > yH) dh += ' L' + xE + ',' + yIn2;
+        if (xE !== xT) {
+          dh += ' C' + xE + ',' + (yIn2 + PITCH * 0.8) + ' ' + xT + ',' +
+            (yT - PITCH * 0.8) + ' ' + xT + ',' + yT;
+        }
         const hit = svgEl('path');
-        hit.setAttribute('d', d);
+        hit.setAttribute('d', dh);
         hit.setAttribute('fill', 'none');
         hit.setAttribute('stroke', 'transparent');
         hit.setAttribute('stroke-width', '12');
         hit.setAttribute('class', 'md-edge-hit');
-        hit.addEventListener('mouseenter', () => showEdgeX(e, p));
+        hit.addEventListener('mouseenter', () => showEdgeX(e, p, hit));
         hit.addEventListener('mouseleave', hideEdgeXSoon);
         svg.appendChild(hit);
       });
@@ -884,13 +942,17 @@
     const linksBehind = (railFrom, railTo) =>
       links.filter((l) => railIdOf(l.from) === railFrom && railIdOf(l.to) === railTo);
 
-    const showEdgeX = (e, path) => {
+    // `path` is what lights up, `band` the stretch this edge owns alone (they
+    // differ once siblings share a bus) -- the ✕ goes on the band, so two
+    // edges out of one block never put their ✕ in the same place.
+    const showEdgeX = (e, path, band) => {
       if (dragging) return;
       clearTimeout(edgeXTimer);
       hideEdgeXNow();
       path.setAttribute('stroke-width', '3.2');
       edgeXPath = path;
-      const m = path.getPointAtLength(path.getTotalLength() / 2);
+      const at = band || path;
+      const m = at.getPointAtLength(at.getTotalLength() / 2);
       const behind = linksBehind(e.from, e.to);
       edgeXEl = document.createElement('button');
       edgeXEl.className = 'md-edge-x';
