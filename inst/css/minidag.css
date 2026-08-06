@@ -109,8 +109,8 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  height: 28px;
-  margin-bottom: 6px;
+  height: var(--md-row-h, 28px);
+  margin-bottom: var(--md-row-gap, 6px);
   padding: 0 6px;
   border-radius: 7px;
   transition: opacity 0.12s;
@@ -360,7 +360,7 @@
 .minidag .md-ghost {
   position: absolute;
   z-index: 7;
-  height: 28px;
+  height: var(--md-row-h, 28px);
   border-radius: 7px;
   border: 1.5px dashed var(--md-primary);
   background: var(--md-primary-bg);
