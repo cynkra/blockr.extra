@@ -122,6 +122,15 @@
 }
 .minidag .md-chip.dim,
 .minidag .md-stackhead.dim { opacity: 0.25; }
+/* Lineage focus. The deck dims, the rows related to the hovered block keep
+   their `md-rel`. Two classes rather than a write per row, so the fade is
+   CSS's job and hovering a 92-row board costs a handful of DOM writes. */
+.minidag .md-deck.md-focused .md-chip,
+.minidag .md-deck.md-focused .md-stackhead { opacity: 0.28; }
+.minidag .md-deck.md-focused .md-chip.md-rel,
+.minidag .md-deck.md-focused .md-stackhead.md-rel { opacity: 1; }
+.minidag .md-deck.md-focused .md-edge { opacity: 0.12; }
+.minidag .md-deck.md-focused .md-edge.md-rel { opacity: 1; }
 .minidag .md-chip.drop-ok {
   border-color: var(--md-primary);
   background: var(--md-primary-bg);
@@ -363,6 +372,7 @@
   pointer-events: stroke;
   cursor: pointer;
 }
+.minidag .md-deck svg.md-rail path.md-edge { transition: opacity 0.14s ease; }
 .minidag .md-edge-x {
   position: absolute;
   z-index: 12;

@@ -236,6 +236,7 @@
       pendingRender = false;
       if (closePicker) closePicker();
       hideEdgeXNow();
+      clearFocus();
       deckEl.innerHTML = '';
 
       if (!blocks.length) {
@@ -539,12 +540,6 @@
         push('block_select', { id: b.id });
       });
 
-      hoverLineage(el, () => {
-        const keep = upstream(b.id);
-        downstream(b.id).forEach((x) => keep.add(x));
-        keep.add(b.id);
-        return keep;
-      });
       return el;
     };
 
@@ -595,14 +590,6 @@
         openConn(el, 'stack:' + stack.id);
       });
 
-      hoverLineage(el, () => {
-        const keep = new Set(stack.blocks);
-        stack.blocks.forEach((m) => {
-          upstream(m).forEach((x) => keep.add(x));
-          downstream(m).forEach((x) => keep.add(x));
-        });
-        return keep;
-      });
       return el;
     };
 
@@ -672,30 +659,93 @@
       return el;
     };
 
-    const hoverLineage = (el, keepFn) => {
-      el.addEventListener('mouseenter', () => {
-        if (dragging || searchEl.value.trim()) return;
-        const keep = keepFn();
-        const railKeep = (id) => {
-          if (id.startsWith('stack:')) {
-            const s = stacks.find((x) => x.id === id.slice(6));
-            return s && s.blocks.some((m) => keep.has(m));
-          }
-          return keep.has(id);
-        };
-        deckEl.querySelectorAll('.md-chip').forEach((c) => {
-          c.classList.toggle('dim', !railKeep(c.dataset.id));
+    /* ---- lineage on hover ---- */
+
+    // ONE delegated listener with hover intent, not a pair per row. Rows are
+    // 28px with a 6px gap, so per-row enter/leave made a pointer travelling
+    // down the list clear and re-apply the whole highlight through every gap
+    // -- a strobe. The gap now reads as "still on the last row", the enter is
+    // debounced so passing over a row does not light it, and leaving has a
+    // grace period so a wander through the gutter does not drop the focus.
+    // cold start is slower than a move between rows (once you are reading
+    // lineage you want it to follow), and both debounce: a pointer sweeping
+    // past a row never paints it, it only paints where you settle.
+    const FOCUS_IN_MS = 120, FOCUS_MOVE_MS = 60, FOCUS_OUT_MS = 260;
+
+    let focusId = null, focusTimer = null;
+
+    const relatedTo = (railId) => {
+      if (railId.startsWith('stack:')) {
+        const s = stacks.find((x) => x.id === railId.slice(6));
+        const keep = new Set(s ? s.blocks : []);
+        (s ? s.blocks : []).forEach((m) => {
+          upstream(m).forEach((x) => keep.add(x));
+          downstream(m).forEach((x) => keep.add(x));
         });
-        deckEl.querySelectorAll('.md-edge').forEach((p) => {
-          p.style.opacity = railKeep(p.dataset.from) && railKeep(p.dataset.to) ? '1' : '0.15';
-        });
-      });
-      el.addEventListener('mouseleave', () => {
-        if (searchEl.value.trim()) return;
-        deckEl.querySelectorAll('.md-chip').forEach((c) => c.classList.remove('dim'));
-        deckEl.querySelectorAll('.md-edge').forEach((p) => { p.style.opacity = '1'; });
-      });
+        return keep;
+      }
+      const keep = upstream(railId);
+      downstream(railId).forEach((x) => keep.add(x));
+      keep.add(railId);
+      return keep;
     };
+
+    // The focus is two classes -- one on the deck, `md-rel` on the few rows
+    // that stay lit -- so CSS owns the fade and a hover costs a handful of DOM
+    // writes instead of one per row and one per edge (184 of them on the CDEX
+    // board, every time the pointer crossed a gap).
+    const paintFocus = (railId) => {
+      if (focusId === railId) return;
+      focusId = railId;
+      if (!railId) {
+        deckEl.classList.remove('md-focused');
+        deckEl.querySelectorAll('.md-rel').forEach((e) => e.classList.remove('md-rel'));
+        return;
+      }
+      const keep = relatedTo(railId);
+      const lit = (id) => {
+        if (!id) return false;
+        if (id.startsWith('stack:')) {
+          const s = stacks.find((x) => x.id === id.slice(6));
+          return !!s && s.blocks.some((m) => keep.has(m));
+        }
+        return keep.has(id);
+      };
+      deckEl.querySelectorAll('.md-rel').forEach((e) => e.classList.remove('md-rel'));
+      deckEl.querySelectorAll('.md-chip').forEach((c) => {
+        if (lit(c.dataset.id)) c.classList.add('md-rel');
+      });
+      deckEl.querySelectorAll('.md-stackhead').forEach((h) => {
+        const s = stacks.find((x) => x.id === h.dataset.stack);
+        if (s && s.blocks.some((m) => keep.has(m))) h.classList.add('md-rel');
+      });
+      deckEl.querySelectorAll('.md-edge').forEach((p) => {
+        if (lit(p.dataset.from) && lit(p.dataset.to)) p.classList.add('md-rel');
+      });
+      deckEl.classList.add('md-focused');
+    };
+
+    const wantFocus = (railId) => {
+      clearTimeout(focusTimer);
+      if (railId === focusId) return;
+      focusTimer = setTimeout(
+        () => paintFocus(railId),
+        railId ? (focusId ? FOCUS_MOVE_MS : FOCUS_IN_MS) : FOCUS_OUT_MS
+      );
+    };
+
+    deckEl.addEventListener('mouseover', (ev) => {
+      if (dragging || searchEl.value.trim()) return;
+      const row = ev.target.closest('.md-chip, .md-stackhead');
+      if (!row) return;
+      const id = row.dataset.id ||
+        (row.dataset.stack ? 'stack:' + row.dataset.stack : null);
+      if (id) wantFocus(id);
+    });
+
+    deckEl.addEventListener('mouseleave', () => wantFocus(null));
+
+    const clearFocus = () => { clearTimeout(focusTimer); paintFocus(null); };
 
     /* ---- status badges ---- */
 
@@ -731,12 +781,17 @@
 
     const applySearch = () => {
       const q = searchEl.value.trim().toLowerCase();
+      if (q) clearFocus();
       const chips = deckEl.querySelectorAll('.md-chip');
       const heads = deckEl.querySelectorAll('.md-stackhead');
       if (!q) {
         chips.forEach((c) => c.classList.remove('dim'));
         heads.forEach((h) => h.classList.remove('dim'));
-        deckEl.querySelectorAll('.md-edge').forEach((p) => { p.style.opacity = '1'; });
+        // drop the inline value rather than pinning it to 1: the lineage
+        // focus dims edges from CSS, and an inline opacity would outrank it
+        deckEl.querySelectorAll('.md-edge').forEach((p) => {
+          p.style.removeProperty('opacity');
+        });
         deckEl.querySelectorAll('.md-badge').forEach((b) => b.classList.remove('hit'));
         hitsEl.textContent = '';
         return;
@@ -944,6 +999,7 @@
       e.stopPropagation();
       if (closePicker) closePicker();
       hideEdgeXNow();
+      clearFocus();
       const wire = deckEl.querySelector('svg.md-wire');
       const deckBox = deckEl.getBoundingClientRect();
       const p0 = port.getBoundingClientRect();
