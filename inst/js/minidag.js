@@ -159,162 +159,19 @@
       return free;
     };
 
-    /* ---- ordering: stacks are super-nodes ---- */
+    /* ---- ordering + lanes: the pure geometry lives in minidag-layout.js ---- */
 
-    const kahn = (ids, edgesOf, seqOf) => {
-      const order = [], placed = new Set();
-      const pending = [...ids].sort((a, b) => seqOf(a) - seqOf(b));
-      let hadCycle = false;
-      while (pending.length) {
-        let pick = pending.findIndex((u) => edgesOf(u).every((p) => placed.has(p)));
-        if (pick < 0) { pick = 0; hadCycle = true; }
-        const u = pending[pick];
-        pending.splice(pick, 1);
-        placed.add(u);
-        order.push(u);
-      }
-      return { order, hadCycle };
-    };
+    // `minidag-layout.js` owns row order and lane assignment so `node --test`
+    // can hold it to its invariants (tests/js/). Everything below draws.
+    const G = (typeof globalThis !== 'undefined' ? globalThis : window).minidagLayout;
 
-    const superOrder = (stks) => {
-      const sOf = (id) => {
-        const s = stks.find((x) => x.blocks.includes(id));
-        return s ? 's:' + s.id : 'n:' + id;
-      };
-      const units = new Set(blocks.map((b) => sOf(b.id)));
-      const arrSeq = (u) => u.startsWith('s:')
-        ? Math.min(...stks.find((s) => s.id === u.slice(2)).blocks.map((m) => blocks.findIndex((b) => b.id === m)))
-        : blocks.findIndex((b) => b.id === u.slice(2));
-      const seqOf = (u) => lastPos.has(u) ? lastPos.get(u) : 1000 + arrSeq(u);
-      const parentUnits = (u) => {
-        const members = u.startsWith('s:')
-          ? stks.find((s) => s.id === u.slice(2)).blocks
-          : [u.slice(2)];
-        const ps = new Set();
-        members.forEach((m) => parentsOf(m).forEach((p) => {
-          const pu = sOf(p);
-          if (pu !== u) ps.add(pu);
-        }));
-        return [...ps];
-      };
-      return { ...kahn(units, parentUnits, seqOf), sOf };
-    };
+    const model = () => ({ blocks, links, stacks, collapsed, lastPos });
 
-    const innerOrder = (s) => kahn(
-      s.blocks,
-      (id) => parentsOf(id).filter((p) => s.blocks.includes(p)),
-      (id) => lastPos.has('n:' + id) ? lastPos.get('n:' + id)
-        : 1000 + blocks.findIndex((b) => b.id === id)
-    ).order;
-
-    const displayRows = () => {
-      const { order } = superOrder(stacks);
-      const rows = [];
-      order.forEach((u) => {
-        if (u.startsWith('n:')) {
-          rows.push({ t: 'node', node: blockOf(u.slice(2)) });
-          return;
-        }
-        const stack = stacks.find((s) => s.id === u.slice(2));
-        if (collapsed.has(stack.id)) { rows.push({ t: 'stack', stack }); return; }
-        rows.push({ t: 'header', stack });
-        innerOrder(stack).forEach((id) =>
-          rows.push({ t: 'node', node: blockOf(id), inStack: stack }));
-      });
-      return rows;
-    };
-
-    /* ---- rail: collapsed stacks contract to one node ---- */
-
-    const railIdOf = (id) => {
-      const s = stackOf(id);
-      return s && collapsed.has(s.id) ? 'stack:' + s.id : id;
-    };
-
-    const railModel = (rows) => {
-      const entries = rows
-        .map((r, i) => r.t === 'node' ? { id: r.node.id, row: i }
-          : r.t === 'stack' ? { id: 'stack:' + r.stack.id, row: i } : null)
-        .filter(Boolean);
-      const rowOf = new Map(entries.map((e) => [e.id, e.row]));
-      const seen = new Set();
-      const rl = [];
-      links.forEach((l) => {
-        const f = railIdOf(l.from), t = railIdOf(l.to);
-        if (f === t) return;
-        const key = f + '>' + t;
-        if (seen.has(key)) return;
-        seen.add(key);
-        rl.push({ from: f, to: t });
-      });
-      return { entries, rowOf, rl };
-    };
-
-    // Lane allocation. All out-edges of a block ride ONE lane -- its "bus" --
-    // which opens at the block's row and retires after its last consumer.
-    // A lane per EDGE (the git-commit-graph rule) is fine for a git history,
-    // where fan-out is two or three, but real boards are fan-out heavy: on the
-    // CDEX board one global filter feeds eight panels and the gutter grew to
-    // 17 lanes / 290px -- wider than the list it annotates. Bundling by
-    // producer is the metro-map reading (one line, consumers as stations along
-    // it) and holds the gutter to the number of producers open at a row: 6 on
-    // that same board. Fan-IN keeps its own hook per edge, so a merge still
-    // shows both parents arriving.
-    const layout = (entries, rl, rowOf) => {
-      const lanes = [], laneOf = new Map(), busOf = new Map(), edges = [];
-      const firstFree = () => {
-        for (let i = 0; i < lanes.length; i++) if (lanes[i] === null) return i;
-        lanes.push(null);
-        return lanes.length - 1;
-      };
-      // the row after which a producer's bus carries nothing
-      const busEnd = new Map();
-      rl.forEach((l) => {
-        const r = rowOf.get(l.to);
-        if (r === undefined) return;
-        busEnd.set(l.from, Math.max(busEnd.get(l.from) ?? -1, r));
-      });
-
-      entries.forEach((e) => {
-        const ins = rl.filter((l) => l.to === e.id);
-        const outs = rl.filter((l) => l.from === e.id);
-
-        // sit on the leftmost parent bus -> a chain stays one straight line
-        const buses = ins
-          .map((l) => busOf.get(l.from))
-          .filter((x) => x !== undefined)
-          .sort((a, b) => a - b);
-        const onBus = buses.length > 0;
-        const lane = onBus ? buses[0] : firstFree();
-
-        laneOf.set(e.id, lane);
-        lanes[lane] = 1;
-
-        ins.forEach((l) => edges.push({
-          from: l.from,
-          to: l.to,
-          lane: busOf.get(l.from) ?? lane
-        }));
-
-        // retire every bus whose last consumer is this row, BEFORE handing out
-        // this block's own bus: a straight chain then reuses its parent's lane
-        busOf.forEach((bl, src) => {
-          if ((busEnd.get(src) ?? -1) <= e.row) {
-            lanes[bl] = null;
-            busOf.delete(src);
-          }
-        });
-
-        if (outs.length) {
-          const bus = onBus && lanes[lane] !== null ? firstFree() : lane;
-          lanes[bus] = 1;
-          busOf.set(e.id, bus);
-        } else if (!onBus) {
-          lanes[lane] = null;
-        }
-      });
-      return { laneOf, edges, nLanes: Math.max(1, lanes.length) };
-    };
+    const displayRows = () => G.displayRows(model());
+    const innerOrder = (s) => G.innerOrder(model(), s);
+    const railIdOf = (id) => G.railIdOf(model(), id);
+    const railModel = (rows) => G.railModel(model(), rows);
+    const layout = (entries, rl, rowOf) => G.layout(entries, rl, rowOf);
 
     const laneX = (l) => RAIL_L + l * LANE_W;
     const dotY = (r) => r * PITCH + ROW_H / 2;
@@ -935,7 +792,7 @@
     mkstackBtn.addEventListener('click', () => {
       const members = [...selection];
       const trial = [...stacks, { id: '_trial', name: '', blocks: members }];
-      if (superOrder(trial).hadCycle) {
+      if (G.superOrder(model(), trial).hadCycle) {
         barEl.classList.add('err');
         selcountEl.textContent = 'That grouping would tangle the flow';
         return;

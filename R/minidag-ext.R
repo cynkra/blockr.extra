@@ -61,7 +61,8 @@ minidag_js_dep <- memoise0(function() {
     name = "minidag",
     version = as.character(utils::packageVersion("blockr.extra")),
     src = system.file("js", package = "blockr.extra"),
-    script = "minidag.js"
+    # geometry first: `minidag.js` reads `minidagLayout` off the global.
+    script = c("minidag-layout.js", "minidag.js")
   )
 })
 
