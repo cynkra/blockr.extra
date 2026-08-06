@@ -46,7 +46,6 @@ new_minidag_extension <- function(...) {
 minidag_ext_ui <- function(id, board, ...) {
   ns <- shiny::NS(id)
   htmltools::tagList(
-    minidag_css_dep(),
     minidag_js_dep(),
     htmltools::div(
       id = ns("deck"),
@@ -56,14 +55,43 @@ minidag_ext_ui <- function(id, board, ...) {
   )
 }
 
+#' HTML dependency for the minidag rail renderer
+#'
+#' The list+rail editor *without* the board adapter: `minidagRail.create(el,
+#' adapter)` plus the stylesheet, for a host that drives it with an adapter of
+#' its own. blockr.process uses this to edit a process definition -- its nodes
+#' are steps and its edges are dependencies -- with the same rows, rail,
+#' dots and gestures the board editor uses.
+#'
+#' See the header of `inst/js/minidag-rail.js` for the adapter contract.
+#'
+#' @return An [htmltools::htmlDependency()] list.
+#'
+#' @export
+minidag_rail_dep <- memoise0(function() {
+  htmltools::tagList(
+    minidag_css_dep(),
+    htmltools::htmlDependency(
+      name = "minidag-rail",
+      version = as.character(utils::packageVersion("blockr.extra")),
+      src = system.file("js", package = "blockr.extra"),
+      # order is load-bearing: `minidag-rail.js` reads `minidagLayout` off
+      # the global
+      script = c("minidag-layout.js", "minidag-rail.js")
+    )
+  )
+})
+
 minidag_js_dep <- memoise0(function() {
-  htmltools::htmlDependency(
-    name = "minidag",
-    version = as.character(utils::packageVersion("blockr.extra")),
-    src = system.file("js", package = "blockr.extra"),
-    # Order is load-bearing: `minidag-rail.js` reads `minidagLayout` off the
-    # global, and `minidag.js` (the board adapter) reads `minidagRail`.
-    script = c("minidag-layout.js", "minidag-rail.js", "minidag.js")
+  htmltools::tagList(
+    minidag_rail_dep(),
+    htmltools::htmlDependency(
+      name = "minidag",
+      version = as.character(utils::packageVersion("blockr.extra")),
+      src = system.file("js", package = "blockr.extra"),
+      # the board adapter, which reads `minidagRail` off the global
+      script = "minidag.js"
+    )
   )
 })
 

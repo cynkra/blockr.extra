@@ -100,6 +100,10 @@
     /* ---- skeleton ---- */
 
     rootEl.innerHTML = '';
+    // minidag.css is scoped to `.minidag`, and the renderer owns the skeleton
+    // that stylesheet describes -- so it puts the class on rather than making
+    // every host remember to (the board's container already has it).
+    rootEl.classList.add('minidag');
     // The row height is a metric, so CSS reads it from here rather than
     // hard-coding 28px: a process step row is taller than a block row.
     rootEl.style.setProperty('--md-row-h', ROW_H + 'px');
@@ -207,7 +211,7 @@
     const innerOrder = (s) => G.innerOrder(model(), s);
     const railIdOf = (id) => G.railIdOf(model(), id);
     const railModel = (rows) => G.railModel(model(), rows);
-    const layout = (entries, rl, rowOf) => G.layout(entries, rl, rowOf);
+    const layout = (entries, rl, rowOf, back) => G.layout(entries, rl, rowOf, back);
 
     const laneX = (l) => RAIL_L + l * LANE_W;
     const dotY = (r) => r * PITCH + ROW_H / 2;
@@ -1184,7 +1188,9 @@
           if (pendingRender) render();
           return;
         }
-        emit('block_append', { from: sinkOf(railId) });
+        // x/y so an adapter that answers with a picker can open it where the
+        // drag was released
+        emit('block_append', { from: sinkOf(railId), x, y });
         if (pendingRender) render();
       };
 
