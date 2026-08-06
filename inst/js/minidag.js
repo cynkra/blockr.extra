@@ -539,6 +539,15 @@
       });
       deckEl.appendChild(list);
 
+      // One empty row's worth of canvas under the list. On a long board (the
+      // CDEX one is 92 rows) the list fills the panel exactly, so scrolled to
+      // the end there was nowhere left to release a drag for "append" -- and
+      // nowhere for the ghost row to show.
+      const tail = document.createElement('div');
+      tail.className = 'md-tail';
+      tail.style.height = PITCH + 'px';
+      deckEl.appendChild(tail);
+
       const wire = svgEl('svg');
       wire.setAttribute('class', 'md-wire');
       deckEl.appendChild(wire);
