@@ -35,7 +35,7 @@ const mkModel = (blocks, links, stacks, collapsed) => ({
 // every invariant, over one model
 const check = (model, label) => {
   const r = G.railFor(model);
-  const bad = G.invariants(r.entries, r.rl, r.rowOf, r);
+  const bad = G.invariants(r.entries, r.rl, r.rowOf, r, r.back);
   assert.deepStrictEqual(
     bad.map((b) => b.rule + ': ' + b.detail),
     [],
@@ -197,7 +197,7 @@ test('400 random DAGs keep the invariants', () => {
   for (let seed = 1; seed <= 400; seed++) {
     const model = randomDag(rng(seed));
     const r = G.railFor(model);
-    const bad = G.invariants(r.entries, r.rl, r.rowOf, r);
+    const bad = G.invariants(r.entries, r.rl, r.rowOf, r, r.back);
     assert.deepStrictEqual(
       bad.map((b) => b.rule + ': ' + b.detail),
       [],
@@ -221,11 +221,81 @@ test('random stacks keep the invariants', () => {
     // a stack that would tangle the flow is refused in the UI, so skip it
     if (G.superOrder(model, model.stacks).hadCycle) continue;
     const r = G.railFor(model);
-    const bad = G.invariants(r.entries, r.rl, r.rowOf, r);
+    const bad = G.invariants(r.entries, r.rl, r.rowOf, r, r.back);
     assert.deepStrictEqual(
       bad.map((b) => b.rule + ': ' + b.detail),
       [],
       'stack seed ' + seed + ' violated its invariants'
     );
   }
+});
+
+/* ---- loop-backs: the shapes a process makes and a board never does ---- */
+
+test('a rework loop is classified, not sorted around', () => {
+  // deliver -> clean -> qs -> rework -> qs   (the quarterly example's shape)
+  const m = mkModel(
+    ['deliver', 'clean', 'qs', 'rework', 'signoff'],
+    [
+      { from: 'deliver', to: 'clean' },
+      { from: 'clean', to: 'qs' },
+      { from: 'qs', to: 'rework' },
+      { from: 'rework', to: 'qs' },
+      { from: 'qs', to: 'signoff' }
+    ]
+  );
+
+  assert.deepStrictEqual([...G.backEdges(m)], ['rework>qs']);
+
+  const r = check(m, 'rework loop');
+  // the loop is out of the ordering, so the list still reads top to bottom
+  assert.deepStrictEqual(
+    r.rows.map((x) => x.node.id),
+    ['deliver', 'clean', 'qs', 'rework', 'signoff']
+  );
+  assert.strictEqual(r.back.length, 1);
+  assert.strictEqual(r.backs.length, 1);
+  // and it climbs, in a lane of its own
+  assert.ok(r.rowOf.get('rework') > r.rowOf.get('qs'));
+  assert.ok(r.backs[0].lane >= r.nFwdLanes);
+});
+
+test('a 2-cycle picks the arrow that climbs by depth, not by reachability', () => {
+  // both edges are reachable-both-ways; only b -> a is the loop-back, since
+  // `a` is the one the roots reach first
+  const m = mkModel(['root', 'a', 'b'], [
+    { from: 'root', to: 'a' },
+    { from: 'a', to: 'b' },
+    { from: 'b', to: 'a' }
+  ]);
+  assert.deepStrictEqual([...G.backEdges(m)], ['b>a']);
+  const r = check(m, '2-cycle');
+  assert.deepStrictEqual(r.rows.map((x) => x.node.id), ['root', 'a', 'b']);
+});
+
+test('two loops share a gutter lane only when their spans do not overlap', () => {
+  const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+  const links = [
+    { from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'd' },
+    { from: 'd', to: 'e' }, { from: 'e', to: 'f' },
+    { from: 'c', to: 'b' },   // loop over rows 1-2
+    { from: 'f', to: 'e' }    // loop over rows 4-5, disjoint
+  ];
+  const r = check(mkModel(ids, links), 'disjoint loops');
+  assert.strictEqual(r.backs.length, 2);
+  assert.strictEqual(r.backs[0].lane, r.backs[1].lane);
+
+  const nested = check(mkModel(ids, links.slice(0, 5).concat([
+    { from: 'e', to: 'b' },   // rows 1-4
+    { from: 'd', to: 'c' }    // rows 2-3, inside it
+  ])), 'nested loops');
+  assert.strictEqual(nested.backs.length, 2);
+  assert.notStrictEqual(nested.backs[0].lane, nested.backs[1].lane);
+});
+
+test('a board with no loops is unchanged by the loop pass', () => {
+  const r = check(chain(6), 'plain chain');
+  assert.deepStrictEqual(r.back, []);
+  assert.deepStrictEqual(r.backs, []);
+  assert.strictEqual(r.nLanes, r.nFwdLanes);
 });

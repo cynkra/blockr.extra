@@ -24,8 +24,14 @@
  *                                variadic); a process asks the producer
  *                                (which outcome does this branch leave on).
  *   slotPrompt(from, to)         caption of the slot picker
- *   opts { search, stacks, remove, status, allowCycles, nameEdit,
- *          searchPlaceholder, emptyText, emptyAddText, metrics }
+ *   showSlot(link) -> bool       whether that slot is worth naming
+ *   opts { search, stacks, remove, status, allowCycles, nameEdit, edgeLabels,
+ *          labelPad, searchPlaceholder, emptyText, emptyAddText, metrics }
+ *
+ * Loop-backs (`opts.allowCycles`) and edge labels (`opts.edgeLabels`) are off
+ * for a board, which has neither, and on for a process, which is defined by
+ * both: an arrow climbing back to the QS check, labelled with the outcome it
+ * left on.
  * }
  */
 (function (root, factory) {
@@ -65,12 +71,16 @@
     return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
   };
 
+  let uidCounter = 0;
+
   function create(rootEl, adapter) {
 
+    const uid = 'md' + uidCounter++;
     const emit = (name, payload) => adapter.emit(name, payload);
     const opts = Object.assign({
       search: true, stacks: true, remove: true, status: true,
       allowCycles: false, nameEdit: 'dblclick',
+      edgeLabels: false, labelPad: 34,
       searchPlaceholder: 'Search blocks…',
       emptyText: 'No blocks yet.',
       emptyAddText: '+ Add a block'
@@ -291,15 +301,26 @@
         if (r.t === 'node') lastPos.set('n:' + r.node.id, i);
         else lastPos.set('s:' + r.stack.id, i);
       });
-      const { entries, rowOf, rl } = railModel(rows);
-      const { laneOf, edges, nLanes } = layout(entries, rl, rowOf);
-      const railW = RAIL_L + nLanes * LANE_W + RAIL_R;
+      const { entries, rowOf, rl, back } = railModel(rows);
+      const { laneOf, edges, backs, nLanes } = layout(entries, rl, rowOf, back);
+      const labelPad = opts.edgeLabels ? opts.labelPad : 0;
+      const railW = RAIL_L + nLanes * LANE_W + RAIL_R + labelPad;
       const H = rows.length * PITCH;
 
       const svg = svgEl('svg');
       svg.setAttribute('class', 'md-rail');
       svg.setAttribute('width', railW);
       svg.setAttribute('height', H);
+
+      const arrowId = uid + '-arrow';
+      if (backs.length) {
+        const defs = svgEl('defs');
+        defs.innerHTML =
+          '<marker id="' + arrowId + '" viewBox="0 0 8 8" refX="7" refY="4" ' +
+          'markerWidth="5" markerHeight="5" orient="auto">' +
+          '<path d="M0,0 L8,4 L0,8 z" class="md-arrow"/></marker>';
+        svg.appendChild(defs);
+      }
 
       // Siblings share their producer's bus, so their drawn paths overlap
       // above the first consumer. Hovering has to stay unambiguous: each edge
@@ -365,6 +386,65 @@
         hit.addEventListener('mouseleave', hideEdgeXSoon);
         svg.appendChild(hit);
       });
+
+      // Loop-backs climb the right-hand gutter, dashed and arrowed: they run
+      // against the reading direction, so they are drawn as the exception
+      // they are rather than as another line in the flow.
+      backs.forEach((e) => {
+        const xF = laneX(laneOf.get(e.from)), xT = laneX(laneOf.get(e.to));
+        const yF = dotY(rowOf.get(e.from)), yT = dotY(rowOf.get(e.to));
+        const xB = laneX(e.lane);
+        const p = svgEl('path');
+        p.setAttribute('d',
+          'M' + xF + ',' + yF +
+          ' C' + (xF + LANE_W) + ',' + yF + ' ' + xB + ',' + (yF - GAP) +
+          ' ' + xB + ',' + (yF - PITCH * 0.5) +
+          ' L' + xB + ',' + (yT + PITCH * 0.5) +
+          ' C' + xB + ',' + (yT + GAP) + ' ' + (xT + LANE_W) + ',' + yT +
+          ' ' + (xT + DOT_R + 2) + ',' + yT);
+        p.setAttribute('fill', 'none');
+        p.setAttribute('stroke', LANE_COLORS[e.lane % LANE_COLORS.length]);
+        p.setAttribute('stroke-width', '1.6');
+        p.setAttribute('stroke-dasharray', '3 3');
+        p.setAttribute('marker-end', 'url(#' + arrowId + ')');
+        p.setAttribute('class', 'md-edge md-edge-back');
+        p.dataset.from = e.from;
+        p.dataset.to = e.to;
+        svg.appendChild(p);
+        const hit = svgEl('path');
+        hit.setAttribute('d', p.getAttribute('d'));
+        hit.setAttribute('fill', 'none');
+        hit.setAttribute('stroke', 'transparent');
+        hit.setAttribute('stroke-width', '12');
+        hit.setAttribute('class', 'md-edge-hit');
+        hit.addEventListener('mouseenter', () => showEdgeX(e, p, hit));
+        hit.addEventListener('mouseleave', hideEdgeXSoon);
+        svg.appendChild(hit);
+      });
+
+      // What a link is CALLED, in the gutter beside the row it feeds. On a
+      // board that is the input slot; in a process it is the branch the work
+      // left on ("false"), which is the whole reason a reader can tell a
+      // rework arm from the happy path. Anchored at the consumer, so a
+      // producer fanning out four ways does not stack four labels on one row.
+      if (opts.edgeLabels) {
+        const perRow = new Map();
+        edges.concat(backs).forEach((e) => {
+          const l = linksBehind(e.from, e.to)[0];
+          if (!l || !showSlot(l)) return;
+          const r = rowOf.get(e.to);
+          const n = perRow.get(r) || 0;
+          perRow.set(r, n + 1);
+          const t = svgEl('text');
+          t.setAttribute('x', railW - RAIL_R);
+          t.setAttribute('y', dotY(r) - 5 - n * 9);
+          t.setAttribute('text-anchor', 'end');
+          t.setAttribute('class', 'md-edge-label');
+          t.setAttribute('fill', LANE_COLORS[e.lane % LANE_COLORS.length]);
+          t.textContent = l.input;
+          svg.appendChild(t);
+        });
+      }
 
       entries.forEach((e) => {
         const isStack = e.id.startsWith('stack:');

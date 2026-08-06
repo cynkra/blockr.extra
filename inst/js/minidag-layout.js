@@ -56,8 +56,78 @@
     return { order, hadCycle };
   };
 
+  /* ---- back edges ---- */
+
+  // A board is acyclic, a process is not: a QS check that fails sends the
+  // work back for rework, and that arrow points UP the list. Such an edge is
+  // classified out of the ordering (otherwise every loop would make the
+  // topological sort give up and fall back to array order) and drawn in its
+  // own gutter.
+  //
+  // The rule is `tidybpmn::loop_deps()`, ported so R and the browser agree on
+  // which arrow is the loop: `from -> to` is a loop-back iff `from` is
+  // reachable from `to` AND `from` sits no closer to the roots than `to`.
+  // Plain reachability is not enough -- in a 2-cycle it holds both ways, and
+  // the depth is what breaks the tie.
+  const backEdges = (model) => {
+    const links = model.links || [];
+    const ids = model.blocks.map((b) => b.id);
+    const succ = new Map(ids.map((id) => [id, []]));
+    links.forEach((l) => {
+      if (succ.has(l.from)) succ.get(l.from).push(l.to);
+    });
+
+    const hasParent = new Set(links.map((l) => l.to));
+    const depth = new Map(ids.map((id) => [id, Infinity]));
+    let queue = ids.filter((id) => !hasParent.has(id));
+    queue.forEach((id) => depth.set(id, 0));
+    while (queue.length) {
+      const x = queue.shift();
+      (succ.get(x) || []).forEach((nx) => {
+        const d = depth.get(x) + 1;
+        if (depth.get(nx) > d) { depth.set(nx, d); queue.push(nx); }
+      });
+    }
+
+    const reach = new Map();
+    const reachable = (from) => {
+      if (reach.has(from)) return reach.get(from);
+      const seen = new Set();
+      const q = [...(succ.get(from) || [])];
+      while (q.length) {
+        const x = q.shift();
+        if (seen.has(x)) continue;
+        seen.add(x);
+        q.push(...(succ.get(x) || []));
+      }
+      reach.set(from, seen);
+      return seen;
+    };
+
+    const back = new Set();
+    links.forEach((l) => {
+      if (l.from === l.to) return;
+      if (reachable(l.to).has(l.from) && depth.get(l.from) >= depth.get(l.to)) {
+        back.add(l.from + '>' + l.to);
+      }
+    });
+    return back;
+  };
+
+  // memoised per model object rather than stored on it: `railFor` walks the
+  // same model three times and the classification is not free, but the model
+  // belongs to the caller
+  const backCache = new WeakMap();
+  const backSet = (model) => {
+    let s = backCache.get(model);
+    if (!s) { s = backEdges(model); backCache.set(model, s); }
+    return s;
+  };
+
+  const isBack = (model, l) => backSet(model).has(l.from + '>' + l.to);
+
   const parentsOf = (model, id) =>
-    model.links.filter((l) => l.to === id).map((l) => l.from);
+    model.links.filter((l) => l.to === id && !isBack(model, l)).map((l) => l.from);
 
   const superOrder = (model, stks) => {
     const blocks = model.blocks;
@@ -129,16 +199,16 @@
       .filter(Boolean);
     const rowOf = new Map(entries.map((e) => [e.id, e.row]));
     const seen = new Set();
-    const rl = [];
+    const rl = [], back = [];
     model.links.forEach((l) => {
       const f = railIdOf(model, l.from), t = railIdOf(model, l.to);
       if (f === t) return;
       const key = f + '>' + t;
       if (seen.has(key)) return;
       seen.add(key);
-      rl.push({ from: f, to: t });
+      (isBack(model, l) ? back : rl).push({ from: f, to: t });
     });
-    return { entries, rowOf, rl };
+    return { entries, rowOf, rl, back };
   };
 
   /* ---- lanes ---- */
@@ -150,7 +220,26 @@
   // consumers as stations along it, is the metro-map reading and holds the
   // CDEX board to 7 lanes instead of 17. Fan-IN keeps a hook per edge, so a
   // merge still shows both parents arriving.
-  const layout = (entries, rl, rowOf) => {
+  // Loop-backs get their own gutter to the RIGHT of every forward lane. They
+  // are rare (a process has one or two), they run the other way, and mixing
+  // them into the forward lanes would make a line that descends and a line
+  // that climbs share a column -- which is exactly the picture that cannot be
+  // read. Two loops only share a gutter lane when their spans do not overlap.
+  const backLanes = (back, rowOf, from) => {
+    const spans = [];       // lane -> [{a, b}]
+    return back.map((l) => {
+      const a = Math.min(rowOf.get(l.to), rowOf.get(l.from));
+      const b = Math.max(rowOf.get(l.to), rowOf.get(l.from));
+      let lane = 0;
+      while (lane < spans.length &&
+             spans[lane].some((s) => a < s.b && s.a < b)) lane++;
+      if (lane === spans.length) spans.push([]);
+      spans[lane].push({ a, b });
+      return { from: l.from, to: l.to, lane: from + lane };
+    });
+  };
+
+  const layout = (entries, rl, rowOf, back) => {
     const lanes = [];                  // lane index -> occupied? (null = free)
     const laneOf = new Map();          // rail id -> the lane its dot sits in
     const busOf = new Map();           // rail id -> the lane its out-edges ride
@@ -220,7 +309,16 @@
       }
     });
 
-    return { laneOf, edges, nLanes: Math.max(1, lanes.length) };
+    const nFwd = Math.max(1, lanes.length);
+    const backs = backLanes(
+      (back || []).filter((l) =>
+        rowOf.has(l.from) && rowOf.has(l.to)),
+      rowOf,
+      nFwd
+    );
+    const nLanes = backs.reduce((n, b) => Math.max(n, b.lane + 1), nFwd);
+
+    return { laneOf, edges, backs, nLanes, nFwdLanes: nFwd };
   };
 
   /* ---- invariants ---- */
@@ -228,7 +326,7 @@
   // What has to be true of any rail we draw. Tests assert this over real
   // boards, hand-written shapes and random graphs; a wrong-looking rail is
   // usually a broken invariant rather than a wrong graph.
-  const invariants = (entries, rl, rowOf, res) => {
+  const invariants = (entries, rl, rowOf, res, back) => {
     const bad = [];
     const at = new Map(entries.map((e) => [e.row, e.id]));
     const rows = entries.map((e) => e.row).sort((a, b) => a - b);
@@ -288,18 +386,57 @@
       }
     });
 
+    /* loop-backs */
+
+    const backs = res.backs || [];
+    if (backs.length !== (back || []).length) {
+      say('back-per-link',
+        (back || []).length + ' loops -> ' + backs.length + ' drawn');
+    }
+
+    const bspans = new Map();
+    backs.forEach((e) => {
+      const a = rowOf.get(e.from), b = rowOf.get(e.to);
+      if (a === undefined || b === undefined) {
+        say('edge-endpoints', e.from + '>' + e.to + ' has no row');
+        return;
+      }
+      // a loop-back is the one arrow allowed to point up the list
+      if (!(a >= b)) {
+        say('back-upward', e.from + '>' + e.to + ' runs ' + a + ' -> ' + b);
+      }
+      // and it must stay out of the forward lanes entirely
+      if (e.lane < res.nFwdLanes) {
+        say('back-own-gutter',
+          e.from + '>' + e.to + ' at lane ' + e.lane +
+          ' among ' + res.nFwdLanes + ' forward lanes');
+      }
+      const arr = bspans.get(e.lane) || [];
+      arr.push({ id: e.from + '>' + e.to, a: Math.min(a, b), b: Math.max(a, b) });
+      bspans.set(e.lane, arr);
+    });
+    bspans.forEach((arr, lane) => {
+      arr.forEach((x, i) => arr.slice(i + 1).forEach((y) => {
+        if (x.a < y.b && y.a < x.b) {
+          say('back-lane-exclusive',
+            'lane ' + lane + ': ' + x.id + ' and ' + y.id + ' overlap');
+        }
+      }));
+    });
+
     return bad;
   };
 
   const railFor = (model) => {
     const rows = displayRows(model);
     const rm = railModel(model, rows);
-    const res = layout(rm.entries, rm.rl, rm.rowOf);
+    const res = layout(rm.entries, rm.rl, rm.rowOf, rm.back);
     return Object.assign({ rows }, rm, res);
   };
 
   return {
     kahn,
+    backEdges,
     superOrder,
     displayRows,
     innerOrder,
