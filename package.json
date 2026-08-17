@@ -15,7 +15,6 @@
     "esbuild": "^0.25.0"
   },
   "scripts": {
-    "build:code": "npx esbuild srcjs/code-block/index.js --bundle --outfile=inst/js/blockr-code.js --format=iife --minify",
-    "test": "node --test \"tests/js/*.test.js\""
+    "build:code": "npx esbuild srcjs/code-block/index.js --bundle --outfile=inst/js/blockr-code.js --format=iife --minify"
   }
 }
