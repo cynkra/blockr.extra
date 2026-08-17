@@ -44,18 +44,28 @@ new_compare_block <- function(
           # Push the columns common to both inputs on every data change —
           # blockr.dplyr's column-metadata protocol, so the pickers show the
           # same name + label secondary text as every other block.
-          shiny::observeEvent(list(x(), y()), {
-            common <- intersect(colnames(x()), colnames(y()))
-            session$sendCustomMessage(
-              "compare-columns",
-              list(
-                id = session$ns("compare_input"),
-                columns = blockr.dplyr::build_column_picker_meta(
-                  x()[, common, drop = FALSE]
+          send_columns <- function() {
+            # `x()`/`y()` throw while an upstream block is unset or erroring;
+            # the next data change re-sends, so swallow it here rather than
+            # take down the announce observer.
+            tryCatch(
+              {
+                common <- intersect(colnames(x()), colnames(y()))
+                session$sendCustomMessage(
+                  "compare-columns",
+                  list(
+                    id = session$ns("compare_input"),
+                    columns = blockr.dplyr::build_column_picker_meta(
+                      x()[, common, drop = FALSE]
+                    )
+                  )
                 )
-              )
+              },
+              error = function(e) NULL
             )
-          })
+          }
+
+          shiny::observeEvent(list(x(), y()), send_columns())
 
           # One-shot heuristic: fill defaults on first data load
           shiny::observe({
@@ -89,17 +99,39 @@ new_compare_block <- function(
             )
           )
 
+          send_state <- function() {
+            session$sendCustomMessage(
+              "compare-block-update",
+              list(
+                id = session$ns("compare_input"),
+                state = shiny::isolate(r_state())
+              )
+            )
+          }
+
           # R -> JS: restore, external control, and the heuristic seed. Fires
           # on init; blockr-core.js queues it until the element binds.
           shiny::observeEvent(r_state(), {
             if (self_write$active) {
               self_write$active <- FALSE
             } else {
-              session$sendCustomMessage(
-                "compare-block-update",
-                list(id = session$ns("compare_input"), state = r_state())
-              )
+              send_state()
             }
+          })
+
+          # Deferred dock panel: both pushes above went out at boot, before
+          # this block's JS existed on the page (it ships with the panel), and
+          # Shiny drops a custom message that has no handler. The client
+          # announces on bind when nothing was queued for it, which is the
+          # signal to send again — without this the block comes up with empty
+          # pickers and the JS default metric, and the first edit writes that
+          # over the restored state. Same fix as blockr.dplyr 0.2.0.9005.
+          #
+          # `<container id>_ready` is what `Blockr.registerBlock()` sets; the
+          # container is `compare_input`, declared in the ui() below.
+          shiny::observeEvent(input$compare_input_ready, {
+            send_columns()
+            send_state()
           })
 
           list(

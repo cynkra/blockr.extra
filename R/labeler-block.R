@@ -37,15 +37,23 @@ new_labeler_block <- function(labels = list(), ...) {
 
           # Push column metadata (names + existing labels) to JS on every
           # data change — same protocol as the blockr.dplyr blocks.
-          shiny::observeEvent(data(), {
-            session$sendCustomMessage(
-              "labeler-columns",
-              list(
-                id = session$ns("labeler_input"),
-                columns = blockr.dplyr::build_column_picker_meta(data())
-              )
+          send_columns <- function() {
+            # `data()` throws while an upstream block is unset or erroring;
+            # the next `data()` change re-sends, so swallow it here rather
+            # than take down the announce observer.
+            tryCatch(
+              session$sendCustomMessage(
+                "labeler-columns",
+                list(
+                  id = session$ns("labeler_input"),
+                  columns = blockr.dplyr::build_column_picker_meta(data())
+                )
+              ),
+              error = function(e) NULL
             )
-          })
+          }
+
+          shiny::observeEvent(data(), send_columns())
 
           self_write <- new.env(parent = emptyenv())
           self_write$active <- FALSE
@@ -56,6 +64,16 @@ new_labeler_block <- function(labels = list(), ...) {
             r_labels(as_label_list(input$labeler_input$labels))
           })
 
+          send_state <- function() {
+            session$sendCustomMessage(
+              "labeler-block-update",
+              list(
+                id = session$ns("labeler_input"),
+                state = list(labels = shiny::isolate(r_labels()))
+              )
+            )
+          }
+
           # R -> JS: restore / external control. Fires on init (no
           # ignoreInit) so the constructor state reaches the JS class;
           # blockr-core.js queues it until the element binds.
@@ -63,14 +81,23 @@ new_labeler_block <- function(labels = list(), ...) {
             if (self_write$active) {
               self_write$active <- FALSE
             } else {
-              session$sendCustomMessage(
-                "labeler-block-update",
-                list(
-                  id = session$ns("labeler_input"),
-                  state = list(labels = r_labels())
-                )
-              )
+              send_state()
             }
+          })
+
+          # Deferred dock panel: both pushes above went out at boot, before
+          # this block's JS existed on the page (it ships with the panel), and
+          # Shiny drops a custom message that has no handler. The client
+          # announces on bind when nothing was queued for it, which is the
+          # signal to send again — without this the block comes up with one
+          # empty row and no columns, and the first edit writes that over the
+          # restored labels. Same fix as blockr.dplyr 0.2.0.9005.
+          #
+          # `<container id>_ready` is what `Blockr.registerBlock()` sets; the
+          # container is `labeler_input`, declared in the ui() below.
+          shiny::observeEvent(input$labeler_input_ready, {
+            send_columns()
+            send_state()
           })
 
           list(
