@@ -26,11 +26,16 @@
    * Internal per-row UI record. `touched` tracks whether the label text is
    * a deliberate user edit (or restored state) as opposed to a prefill of
    * the column's current label — only touched rows may emit "" (= remove).
+   * `colPinned` is the same distinction for the COLUMN: true when the board
+   * restored it or the user picked it, false while it is just the select's
+   * auto-pick of option 0. Only a pinned column survives a column list that
+   * does not offer it.
    * @typedef {Object} LabelerRow
    * @property {number} id
    * @property {string} col
    * @property {string} label
    * @property {boolean} touched
+   * @property {boolean} colPinned
    * @property {any} _colSelect
    * @property {HTMLDivElement | null} rowEl
    * @property {HTMLInputElement} [_labelInput]
@@ -103,6 +108,9 @@
         col: col || '',
         label: label || '',
         touched: !!touched,
+        // A column handed to us came from the board or the user; one the
+        // select picks on its own does not.
+        colPinned: !!col,
         _colSelect: null,
         rowEl: null
       };
@@ -122,6 +130,7 @@
         placeholder: 'Column…',
         onChange: (value) => {
           row.col = value;
+          row.colPinned = true;
           // A newly picked column starts from its current label — the row
           // becomes an edit of that label, not of the previous column's.
           row.label = this._existingLabel(value);
@@ -163,9 +172,10 @@
       });
       rowEl.appendChild(rmBtn);
 
-      // Sync row.col with the select's actual value — the select may
-      // auto-pick the first option when col is null/empty.
-      row.col = row._colSelect.getValue() || '';
+      // A row created with no column adopts the select's auto-pick (option 0).
+      // A row that ASKED for one keeps it, even when `columnOptions` does not
+      // carry it yet — see updateColumns().
+      if (!row.col) row.col = row._colSelect.getValue() || '';
       this._prefill(row);
 
       /** @type {HTMLDivElement} */ (this.listEl).appendChild(rowEl);
@@ -288,13 +298,30 @@
         this.columnMeta[col.name] = col;
         this.columnOptions.push({ value: col.name, label: col.label || '' });
       }
+      const offered = this.columnOptions.map(o => o.value);
       for (const r of this.rows) {
-        if (r._colSelect) {
-          const current = r._colSelect.getValue();
-          r._colSelect.setOptions(this.columnOptions, current);
-          r.col = r._colSelect.getValue();
-          this._prefill(r);
+        if (!r._colSelect) continue;
+        // The ROW owns its column, the widget does not. Reading the pick back
+        // out of the select and storing it here is what used to lose a
+        // restored board: an upstream still settling delivers a column list
+        // without the row's column, `setOptions` slides the widget onto
+        // option 0 (it has no allowEmpty), and the row adopted that -- every
+        // row collapsing onto the first column, permanently, because the
+        // authored name was gone before the real list arrived. Worse, two
+        // rows on one column compose to a single label.
+        if (r.colPinned && r.col && offered.indexOf(r.col) < 0) {
+          // Not offered (yet): keep showing the column the board asked for
+          // rather than a name nobody picked. `updateOptions` swaps the list
+          // without touching the selection.
+          r._colSelect.updateOptions(this.columnOptions);
+        } else {
+          // Unpinned rows still follow the list: a row that only ever held
+          // the select's auto-pick must not keep a column the new data has
+          // dropped.
+          r._colSelect.setOptions(this.columnOptions, r.col || null);
+          r.col = r._colSelect.getValue() || '';
         }
+        this._prefill(r);
       }
       this._syncColWidth();
     }
