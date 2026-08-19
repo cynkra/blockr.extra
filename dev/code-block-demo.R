@@ -1,4 +1,4 @@
-# Demo / e2e testbed for new_code_block (the CodeMirror editor).
+# Demo / e2e testbed for new_function_block (the CodeMirror editor).
 #   Rscript blockr.extra/dev/code-block-demo.R   (serves on 3838)
 # OpenAI key from /workspace/.Renviron (launch from /workspace).
 

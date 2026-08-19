@@ -21,9 +21,12 @@
  *
  * Bundled to inst/js/blockr-code.js via esbuild (see package.json).
  */
-import { Compartment, EditorState } from "@codemirror/state";
 import {
-  EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine
+  Compartment, EditorState, StateEffect, StateField, RangeSetBuilder
+} from "@codemirror/state";
+import {
+  EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine,
+  Decoration, gutter, GutterMarker
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { StreamLanguage, syntaxHighlighting, defaultHighlightStyle, indentUnit, indentService, getIndentUnit } from "@codemirror/language";
@@ -129,6 +132,103 @@ import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
     return { from: word.from, options };
   };
 
+  // ---- input marks -------------------------------------------------------
+  // R classifies each top-level line of the script and pushes the ones that
+  // became controls (`blockr-code-inputs`). The editor paints them: a tinted
+  // band on the line plus a gutter glyph naming the widget. This is what tells
+  // the user which lines are special -- there is no fence comment in the
+  // script, deliberately. Because the marks are pushed on every debounced
+  // keystroke, a glyph appears the moment a line becomes a declaration and
+  // disappears the moment it stops being one, which teaches the rule faster
+  // than any documentation.
+  const setInputMarks = StateEffect.define();
+
+  const inputMarks = StateField.define({
+    create: () => [],
+    update(value, tr) {
+      for (const e of tr.effects) {
+        if (e.is(setInputMarks)) return e.value;
+      }
+      return value;
+    }
+  });
+
+  const inputLineDeco = Decoration.line({ class: "cm-input-line" });
+
+  const inputDecorations = EditorView.decorations.compute(
+    [inputMarks, "doc"],
+    (state) => {
+      const marks = state.field(inputMarks, false) || [];
+      const lines = [];
+      for (const m of marks) {
+        const n = Number(m && m.line);
+        if (n >= 1 && n <= state.doc.lines && lines.indexOf(n) === -1) {
+          lines.push(n);
+        }
+      }
+      // RangeSetBuilder requires ascending positions.
+      lines.sort((a, b) => a - b);
+      const builder = new RangeSetBuilder();
+      for (const n of lines) {
+        builder.add(state.doc.line(n).from, state.doc.line(n).from, inputLineDeco);
+      }
+      return builder.finish();
+    }
+  );
+
+  class InputGlyph extends GutterMarker {
+    constructor(text, title, kind) {
+      super(); this.text = text; this.title = title; this.kind = kind;
+    }
+    eq(other) {
+      return other.text === this.text && other.title === this.title &&
+        other.kind === this.kind;
+    }
+    toDOM() {
+      const span = document.createElement("span");
+      span.className = "cm-input-glyph";
+      // The kind drives the CSS: the select caret is drawn with borders
+      // rather than typed, because the triangle codepoints are missing from
+      // enough font stacks to render as nothing at gutter size.
+      if (this.kind) span.dataset.kind = this.kind;
+      span.textContent = this.text || "";
+      if (this.title) span.title = this.title;
+      return span;
+    }
+  }
+
+  const inputGutter = gutter({
+    class: "cm-input-gutter",
+    lineMarker(view, line) {
+      const marks = view.state.field(inputMarks, false) || [];
+      const n = view.state.doc.lineAt(line.from).number;
+      for (const m of marks) {
+        if (Number(m.line) === n) return new InputGlyph(m.glyph, m.title, m.kind);
+      }
+      return null;
+    },
+    lineMarkerChange: (update) =>
+      update.transactions.some((tr) =>
+        tr.effects.some((e) => e.is(setInputMarks)))
+  });
+
+  // Marks may arrive before the editor exists (a block in a dock panel that
+  // has never been opened), so they are remembered on the element and applied
+  // when the view is built. The initial set also rides in on `data-input-marks`
+  // so a deferred mount is painted correctly on first reveal, without waiting
+  // for a round trip.
+  const readMarks = (el) => {
+    if (el._cmMarks) return el._cmMarks;
+    const raw = el.getAttribute("data-input-marks");
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  };
+
   const makeView = (el) => {
     let view;
 
@@ -221,6 +321,9 @@ import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
         syntaxHighlighting(defaultHighlightStyle),
         StreamLanguage.define(r),
         autocompletion({ override: [makeRSource(el)], activateOnTyping: true }),
+        inputMarks,
+        inputDecorations,
+        inputGutter,
         mergeCompartment.of([]),
         keymap.of([
           { key: "Mod-Enter", run: () => { runNow(); return true; } },
@@ -231,6 +334,10 @@ import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
       ]
     });
     view = new EditorView({ state, parent: el });
+    const initial = readMarks(el);
+    if (initial.length) {
+      view.dispatch({ effects: setInputMarks.of(initial) });
+    }
     return view;
   };
 
@@ -361,6 +468,19 @@ import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
     el._cmCompletions = Array.isArray(msg.columns)
       ? msg.columns
       : (msg.columns == null ? [] : [msg.columns]);
+  });
+
+  // R -> JS: which lines of the script became controls, and what each became.
+  Shiny.addCustomMessageHandler("blockr-code-inputs", (msg) => {
+    const el = document.getElementById(msg.id);
+    if (!el) return;
+    const marks = Array.isArray(msg.marks)
+      ? msg.marks
+      : (msg.marks == null ? [] : [msg.marks]);
+    el._cmMarks = marks;
+    if (el._cmView) {
+      el._cmView.dispatch({ effects: setInputMarks.of(marks) });
+    }
   });
 
   // Reveal hook (called by the gear toggle): build the deferred editor on

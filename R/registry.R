@@ -9,6 +9,7 @@ register_extra_blocks <- function() {
   blockr.core::register_blocks(
     c(
       "new_function_block",
+      "new_code_block",
       "new_function_var_block",
       "new_async_function_block",
       "new_broom_summary_block",
@@ -19,6 +20,7 @@ register_extra_blocks <- function() {
     ),
     name = c(
       "Function block",
+      "Code block",
       "Function Var block",
       "Async Function block",
       "Broom Summary",
@@ -29,6 +31,7 @@ register_extra_blocks <- function() {
     ),
     description = c(
       "Transform data with a custom R function in a CodeMirror editor (syntax highlighting, autocomplete, inline AI diff). UI auto-generated from function arguments.",
+      "Transform data with a plain R script (no wrapper function). Top-level assignments of plain values become controls: a factor renders a dropdown over its levels, a number a spin box, TRUE/FALSE a checkbox. Exports as idiomatic R with the current values written in.",
       "Transform multiple data frames (...) with a custom R function. UI auto-generated from function arguments.",
       "Transform data with a custom R function asynchronously. Requires mirai daemons. Click Run to execute.",
       "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
@@ -45,10 +48,12 @@ register_extra_blocks <- function() {
       "transform",
       "transform",
       "transform",
+      "transform",
       "transform"
     ),
     icon = c(
       "code-slash",
+      "braces",
       "code-slash",
       "hourglass-split",
       "clipboard-data",
@@ -69,6 +74,24 @@ register_extra_blocks <- function() {
           "pipe |>; namespace-prefix calls (dplyr::filter()) and use",
           ".data[[col]] for string-valued column parameters."
         )
+      ),
+      # new_code_block:
+      paste(
+        "Write `script` as an ordinary R script that transforms `data` (the",
+        "reserved name for the incoming data frame) and ends with the result.",
+        "Do NOT wrap it in a function and do NOT call one.",
+        "\n\nTo offer the user a control, assign a plain value at the top level:",
+        "a factor renders a dropdown (its LEVELS are the choices, and a value of",
+        "length > 1 makes it a multi-select), a bare number a spin box, a string",
+        "a text box, TRUE/FALSE a checkbox, as.Date() a date picker. Draw the",
+        "levels from the data where that is what you mean, e.g.",
+        "`site <- factor(\"Basel\", unique(data$site))`. A literal is always the",
+        "VALUE, never the choice list.",
+        "\n\nEverything else is code: an assignment whose right-hand side is a",
+        "pipe or any other call is a local variable, not a control.",
+        "\n\nR coding rules: prefer dplyr/tidyr chained with the base pipe |>",
+        "(never %>%). Namespace-prefix every call except base and stats",
+        "(dplyr::filter(), tidyr::pivot_longer())."
       ),
       # new_function_var_block:
       paste(
@@ -115,6 +138,24 @@ register_extra_blocks <- function() {
             "    dplyr::select(dplyr::all_of(unname(unlist(keep)))) |>",
             "    dplyr::slice_head(n = n)",
             "}",
+            sep = "\n"
+          ),
+          type = arg_string()
+        )
+      ),
+      # new_code_block:
+      new_arg_specs(
+        script = new_arg_spec(
+          "A string of R code transforming `data` into the result. Top-level assignments of plain values (literals, c(), factor(), as.Date()) become UI controls; every other statement is code.",
+          # Anchors the two things models get wrong: no function wrapper, and a
+          # factor (not a bare character vector) is how a dropdown is declared.
+          example = paste(
+            "species <- factor(\"setosa\", unique(data$Species))",
+            "n <- 10",
+            "",
+            "data |>",
+            "  dplyr::filter(Species == species) |>",
+            "  dplyr::slice_head(n = n)",
             sep = "\n"
           ),
           type = arg_string()

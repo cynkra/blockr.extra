@@ -102,12 +102,17 @@ contract_error <- function(code, required_args, message) {
 #'   violated. `NULL` skips the contract check.
 #' @param contract_message Message shown in the status bar when `required_args`
 #'   is violated (the block's existing `error_message`).
+#' @param rest_label A reactive returning a short string to show in the
+#'   otherwise-empty footer at rest, or `NULL` for the blank bar. The code block
+#'   uses it to say how many of the script's lines became controls — the
+#'   explanation that deliberately does not live in the code itself.
 #' @return Invisibly `NULL` (used for its side effects).
 #' @noRd
 setup_code_editor_server <- function(input, output, session, base,
                                      cols = shiny::reactive(NULL),
                                      required_args = NULL,
-                                     contract_message = NULL) {
+                                     contract_message = NULL,
+                                     rest_label = shiny::reactive(NULL)) {
   ns <- session$ns
 
   # Push the upstream column names to the editor whenever the data changes.
@@ -225,7 +230,15 @@ setup_code_editor_server <- function(input, output, session, base,
         # shrink the frame by its height and reflow the whole block upward on
         # every Run; a persistent (quiet) bar holds the frame height constant.
         # Constant height across states is enforced via `min-height` in CSS.
-        return(shiny::div(class = "blockr-code-footer blockr-code-footer--rest"))
+        lab <- tryCatch(rest_label(), error = function(e) NULL)
+        return(
+          shiny::div(
+            class = "blockr-code-footer blockr-code-footer--rest",
+            if (!is.null(lab)) {
+              shiny::span(class = "blockr-code-footer__label", lab)
+            }
+          )
+        )
       }
       perr <- parse_error(ed)
       if (!is.null(perr)) {
@@ -287,9 +300,13 @@ setup_code_editor_server <- function(input, output, session, base,
 #' @param ns Namespace function (`shiny::NS(id)`).
 #' @param fn_text Initial function code (baked into `data-value`).
 #' @param label Field label shown above the editor.
+#' @param marks Initial input-line marks (see `cb_syntactic_marks()`), baked
+#'   into `data-input-marks`. A block whose panel is never opened never receives
+#'   the pushed message, so the initial paint has to ride in on the markup.
 #' @return A Shiny tag.
 #' @noRd
-code_editor_ui <- function(ns, fn_text, label = "Function code") {
+code_editor_ui <- function(ns, fn_text, label = "Function code",
+                           marks = NULL) {
   shiny::tagList(
     blockr_code_dep(),
     code_block_css_dep(),
@@ -308,7 +325,10 @@ code_editor_ui <- function(ns, fn_text, label = "Function code") {
           # signal review completion.
           `data-run-input` = ns("fn_exec"),
           `data-review-done` = ns("fn_review_done"),
-          `data-count-input` = ns("fn_nedits")
+          `data-count-input` = ns("fn_nedits"),
+          `data-input-marks` = if (length(marks)) {
+            as.character(jsonlite::toJSON(marks, auto_unbox = TRUE))
+          }
         ),
         shiny::uiOutput(ns("footer_ui"))
       )
@@ -348,9 +368,11 @@ gear_svg <- function() {
 #' @param fn_text Initial function code.
 #' @param top Optional UI rendered above the editor inside the section.
 #' @param label Editor field label.
+#' @param marks Initial input-line marks, passed through to [code_editor_ui()].
 #' @return A Shiny tag.
 #' @noRd
-gear_editor_ui <- function(ns, fn_text, top = NULL, label = "Function code") {
+gear_editor_ui <- function(ns, fn_text, top = NULL, label = "Function code",
+                           marks = NULL) {
   sec_id <- ns("fn-editor")
   btn_id <- ns("fn-gear-btn")
   shiny::div(
@@ -374,7 +396,7 @@ gear_editor_ui <- function(ns, fn_text, top = NULL, label = "Function code") {
       class = "blockr-gear-section",
       style = "display: none;",
       top,
-      code_editor_ui(ns, fn_text, label = label)
+      code_editor_ui(ns, fn_text, label = label, marks = marks)
     )
   )
 }

@@ -1,4 +1,4 @@
-# Demo / e2e testbed for new_code_block (the CodeMirror editor) on a
+# Demo / e2e testbed for new_function_block (the CodeMirror editor) on a
 # blockr.dock board with the blockr.dag extension.
 #
 #   [data: mtcars] --> [code: function editor]
