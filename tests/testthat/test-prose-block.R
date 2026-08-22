@@ -111,3 +111,100 @@ test_that("external (AI) writes reach state, and re-render through result()", {
     )
   )
 })
+
+# Capture custom messages: assign over the root MockShinySession method
+# (the blockr.dplyr test-ready-handshake.R pattern).
+capture_messages <- function(session) {
+  sent <- new.env(parent = emptyenv())
+  sent$msgs <- list()
+  root <- session$rootScope()
+  root$sendCustomMessage <- function(type, message) {
+    sent$msgs <- c(sent$msgs, list(list(type = type, message = message)))
+    invisible(NULL)
+  }
+  sent
+}
+
+last_of <- function(sent, type) {
+  hits <- Filter(function(m) identical(m$type, type), sent$msgs)
+  if (length(hits)) hits[[length(hits)]]$message else NULL
+}
+
+test_that("chip expressions evaluate individually; one failure is local", {
+  b <- new_prose_block("x")
+
+  shiny::testServer(
+    blockr.core:::block_expr_server(b),
+    {
+      session$flushReact()
+      sent <- capture_messages(session)
+      session$setInputs(
+        prose_exprs = list("nrow(data)", "mean(no_such_object)")
+      )
+      session$flushReact()
+
+      vals <- last_of(sent, "prose-values")$values
+      expect_true(vals[["nrow(data)"]]$ok)
+      expect_identical(vals[["nrow(data)"]]$value, "32")
+      expect_false(vals[["mean(no_such_object)"]]$ok)
+      expect_match(vals[["mean(no_such_object)"]]$value, ".+")
+    },
+    args = list(...args = shiny::reactiveValues(data = mtcars))
+  )
+})
+
+test_that("chip preview is dormant (ok = NA) before data arrives", {
+  b <- new_prose_block("x")
+
+  shiny::testServer(
+    blockr.core:::block_expr_server(b),
+    {
+      session$flushReact()
+      sent <- capture_messages(session)
+      session$setInputs(prose_exprs = list("nrow(data)"))
+      session$flushReact()
+
+      vals <- last_of(sent, "prose-values")$values
+      expect_true(is.na(vals[["nrow(data)"]]$ok))
+    },
+    args = list(...args = shiny::reactiveValues(data = NULL))
+  )
+})
+
+test_that("glue evaluation preserves indentation and newlines (.trim = FALSE)", {
+  b <- new_prose_block("- a\n  - b\n\nRows: {nrow(data)}\n")
+
+  shiny::testServer(
+    blockr.core:::get_s3_method("block_server", b),
+    {
+      session$flushReact()
+      expect_identical(
+        paste(as.character(session$returned$result()), collapse = "\n"),
+        "- a\n  - b\n\nRows: 32\n"
+      )
+    },
+    args = list(
+      x = b,
+      data = list(...args = shiny::reactiveValues(data = mtcars))
+    )
+  )
+})
+
+test_that("doubled braces reach the result as literal braces", {
+  b <- new_prose_block("::: {{.callout-note}}\nhi\n:::")
+
+  shiny::testServer(
+    blockr.core:::get_s3_method("block_server", b),
+    {
+      session$flushReact()
+      expect_identical(
+        paste(as.character(session$returned$result()), collapse = "\n"),
+        "::: {.callout-note}\nhi\n:::"
+      )
+    },
+    args = list(
+      x = b,
+      data = list(...args = shiny::reactiveValues(data = mtcars))
+    )
+  )
+})

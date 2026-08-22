@@ -26,8 +26,22 @@ editor. The \code{text} parameter is externally controllable, so an assistant
 Like \code{\link[blockr.core:new_text_block]{blockr.core::new_glue_block()}}, the text is evaluated with
 \code{\link[glue:glue]{glue::glue()}} against the input data, which is bound by its input name (e.g.
 \code{data}). Reference data with \code{{nrow(data)}}, \code{{data$colname}} or
-\code{{round(mean(data$mpg), 1)}} — a bare \code{{colname}} does not resolve. Such
-references render as editable chips in the WYSIWYG editor.
+\code{{round(mean(data$mpg), 1)}} -- a bare \code{{colname}} does not resolve. In the
+editor a reference renders as a chip showing its evaluated VALUE (the
+expression is one click away); each chip is evaluated on its own, so a typo
+in one reference marks that chip and leaves the rest of the text standing.
+
+Two things run on different clocks. Chip values refresh eagerly -- the
+editor sends the expressions, the server evaluates each in the same
+environment glue gets and pushes the values back -- which costs nothing in
+the DAG. The document itself commits only on blur, Ctrl-Enter or the Apply
+footer, never on a keystroke, so typing does not re-evaluate downstream
+blocks.
+
+Braces the author types as literal text (Quarto attributes, shortcodes) are
+escaped by the editor on the way out (doubled, glue's own escape), so the
+stored markdown stays a valid glue template with no syntax for the author to
+learn.
 }
 \examples{
 if (interactive()) {

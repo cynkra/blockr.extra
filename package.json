@@ -17,7 +17,9 @@
   },
   "scripts": {
     "build:code": "npx esbuild srcjs/code-block/index.js --bundle --outfile=inst/js/blockr-code.js --format=iife --minify",
-    "build:prose": "npx esbuild srcjs/prose-block/index.js --bundle --outfile=inst/js/prose-block.js --format=iife --define:process.env.NODE_ENV=\\\"production\\\"",
-    "build": "npm run build:code && npm run build:prose"
-  }
+    "build:prose": "npx esbuild srcjs/prose-block/index.js --bundle --outfile=inst/js/prose-block.js --format=iife --minify --define:process.env.NODE_ENV=\\\"production\\\"",
+    "build": "npm run build:code && npm run build:prose",
+    "test:js": "node --test tests/js/*.test.mjs"
+  },
+  "type": "module"
 }
