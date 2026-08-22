@@ -48,7 +48,7 @@ class ProseBlock {
     this.editor = null;
 
     this._buildDom();
-    this._initEditor();
+    this._initEditor().catch((e) => console.error("[prose] init failed", e));
     this._bindCommit();
   }
 
@@ -453,14 +453,18 @@ function register() {
   mo.observe(document.body, { childList: true, subtree: true });
 
   // A session (re)connect re-announces every instance's chip expressions:
-  // the initial send can predate the Shiny connection (a deferred dock
-  // panel), and a reconnect wipes server-side inputs.
-  document.addEventListener("shiny:connected", () => {
-    instances.forEach((inst) => {
-      inst._sentExprs = "";
-      inst._sendExprs();
+  // the initial send can predate Shiny.setInputValue existing (the bundle
+  // executes before init-shiny), and a reconnect wipes server-side inputs.
+  // Shiny fires shiny:connected as a jQuery event -- a native
+  // addEventListener never sees it.
+  if (window.jQuery) {
+    window.jQuery(document).on("shiny:connected", () => {
+      instances.forEach((inst) => {
+        inst._sentExprs = "";
+        inst._sendExprs();
+      });
     });
-  });
+  }
 
   if (window.Shiny && Shiny.addCustomMessageHandler) {
     Shiny.addCustomMessageHandler("prose-set", (msg) => {

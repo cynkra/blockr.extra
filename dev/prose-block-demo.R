@@ -12,7 +12,7 @@ board <- new_board(
       "## Report\n\nThe dataset has **{nrow(data)}** rows and mean mpg of {round(mean(data$mpg), 1)}."
     )
   ),
-  links = links(from = "data", to = "note")
+  links = links(from = "data", to = "note", input = "data")
 )
 
 # options(shiny.port = 3838, shiny.host = "0.0.0.0")
