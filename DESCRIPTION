@@ -31,6 +31,7 @@ Suggests:
     blockr.dock,
     ggplot2,
     gt,
+    gtsummary,
     testthat (>= 3.0.0)
 Remotes:
     BristolMyersSquibb/blockr.core,
