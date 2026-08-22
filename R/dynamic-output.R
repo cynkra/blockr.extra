@@ -10,8 +10,12 @@
 eval_with_plot_capture <- function(expr, env) {
   expr_text <- paste(deparse(expr), collapse = "\n")
 
-  # Create environment with access to all attached packages (stats, graphics, etc.)
-  eval_env <- list2env(as.list(env), parent = .GlobalEnv)
+  # Create environment with access to all attached packages (stats, graphics,
+  # etc.). all.names = TRUE is load-bearing: variadic inputs are bound under
+  # dot-prefixed reference symbols (.arg1, .arg2, ... for unnamed DAG-UI slots),
+  # and the default as.list() drops names starting with "." — which would strip
+  # those inputs out of the eval environment.
+  eval_env <- list2env(as.list(env, all.names = TRUE), parent = .GlobalEnv)
 
   # Use evaluate to run code and capture any plots
   res <- evaluate::evaluate(
@@ -48,10 +52,60 @@ eval_with_plot_capture <- function(expr, env) {
   result
 }
 
+#' Is `x` an HTML-renderable object?
+#'
+#' TRUE for objects that carry their own HTML via the `htmltools::as.tags()`
+#' contract: native HTML (`shiny.tag`, `html`, ...), htmlwidgets (plotly,
+#' leaflet, DT, ...), gt tables, and anything that registers a dedicated
+#' `as.tags` method (e.g. composer's `composed_table` — see blockr.sandbox).
+#'
+#' Deliberately a tight allow-list, not "does `as.tags()` not error": `as.tags`
+#' is eager (it turns a bare string or list into text/tag nodes), so we exclude
+#' base implicit classes and only accept a *dedicated* `as.tags` method. Keeps
+#' plain strings, numbers, lists and data frames off this branch so they reach
+#' their own renderers (DataTable / preformatted text).
+#'
+#' @param x Any R object.
+#' @return Single logical.
+#' @noRd
+is_html_renderable <- function(x) {
+  if (inherits(x, c("shiny.tag", "shiny.tag.list", "html", "htmlwidget"))) {
+    return(TRUE)
+  }
+  # A dedicated as.tags method on a non-base class (gt_tbl, composed_table, ...).
+  # Look the method up in htmltools' namespace (the generic's home): as.tags is
+  # imported-not-attached here, so a bare-name getS3method() would miss it. The
+  # base-class exclusion drops htmltools' own eager as.tags.character/.list/...
+  # so plain strings/lists/data frames don't get mistaken for HTML.
+  base_classes <- c(
+    "list", "character", "numeric", "integer", "double", "logical", "complex",
+    "factor", "data.frame", "function", "NULL", "environment", "name", "call"
+  )
+  cls <- setdiff(class(x), base_classes)
+  any(vapply(
+    cls,
+    function(cl) {
+      # Registered method (installed packages: gt, or a load_all'd blockr.sandbox)
+      !is.null(utils::getS3method(
+        "as.tags", cl, optional = TRUE, envir = asNamespace("htmltools")
+      )) ||
+        # Method sourced into the global env / search path. blockr.sandbox is
+        # deployed as an app bundle and `source()`s its composer methods into
+        # GlobalEnv (see its app.R); UseMethod dispatches to those via the search
+        # path, so mirror that lookup here or the object misses this branch.
+        exists(
+          paste0("as.tags.", cl),
+          envir = globalenv(), mode = "function", inherits = TRUE
+        )
+    },
+    logical(1)
+  ))
+}
+
 #' Render any R object dynamically based on its type
 #'
 #' Detects the type of result and renders appropriately:
-#' - gt_tbl: GT HTML
+#' - HTML-renderable (gt, htmlwidgets, composer tables, raw tags): as.tags() HTML
 #' - ggplot: plotOutput with renderPlot
 #' - recordedplot: plotOutput with evaluate::replay
 #' - data.frame: DataTable
@@ -63,9 +117,33 @@ eval_with_plot_capture <- function(expr, env) {
 #' @return A shiny.render.function (renderUI)
 #' @noRd
 render_dynamic_output <- function(result, block, session) {
+  # Data frames follow the board's chosen tabular display, so a function block
+  # previews its result the same way the data and transform blocks around it
+  # do. Only the HTML table can be honored here, and the reason is the
+  # container: this function is the render half of a FIXED `uiOutput` (see
+  # block_ui.function_block), while a blockr.core `tabular_display` also picks
+  # its own container -- `minimal_display` pairs a renderText with a
+  # verbatimTextOutput, and shipping that text into a uiOutput binding renders
+  # nothing. blockr.ui's display is the one whose renderer is already a
+  # renderUI, so it drops straight in; every other display falls back to DT
+  # below rather than being routed through a container it did not ask for.
+  if (inherits(result, "data.frame") &&
+      inherits(blockr.core::tabular_display(), "html_table_display")) {
+    return(blockr.ui::html_table_result(result, block, session))
+  }
   shiny::renderUI({
-    if (inherits(result, "gt_tbl")) {
-      shiny::HTML(gt::as_raw_html(result))
+    if (is_html_renderable(result)) {
+      # Ask the object for its HTML (gt, htmlwidgets, composer composed_table,
+      # ...). Fall back to text if the contract unexpectedly errors.
+      tryCatch(
+        htmltools::as.tags(result),
+        error = function(e) {
+          shiny::pre(
+            style = "background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;",
+            paste(utils::capture.output(print(result)), collapse = "\n")
+          )
+        }
+      )
     } else if (inherits(result, "ggplot")) {
       output_id <- "plot_output"
       session$output[[output_id]] <- shiny::renderPlot({
@@ -79,68 +157,8 @@ render_dynamic_output <- function(result, block, session) {
       })
       shiny::plotOutput(session$ns(output_id))
     } else if (inherits(result, "data.frame")) {
-      if (isTRUE(getOption("blockr.html_table_preview", FALSE))) {
-        page_size <- tryCatch(
-          blockr.core::get_board_option_or_default(
-            "page_size",
-            blockr.core::board_options(block),
-            session
-          ),
-          error = function(e) 5L
-        )
-
-        ns <- session$ns
-
-        tryCatch({
-          sort_input <- session$input$blockr_table_sort
-          current_sort <- if (!is.null(sort_input)) {
-            list(col = sort_input$col, dir = sort_input$dir)
-          } else {
-            list(col = NULL, dir = "none")
-          }
-
-          page <- session$input$blockr_table_page
-          page <- if (is.null(page)) 1L else as.integer(page)
-
-          total_rows <- if (is.null(result)) 0L else nrow(result)
-          max_page <- max(1L, ceiling(total_rows / page_size))
-          page <- min(max(1L, page), max_page)
-
-          tbl_label <- attr(result, "label")
-
-          sorted_result <- apply_table_sort(
-            result,
-            current_sort$col,
-            current_sort$dir
-          )
-
-          start_row <- (page - 1L) * page_size + 1L
-          end_row <- min(page * page_size, total_rows)
-          dat <- if (total_rows > 0 && end_row >= start_row) {
-            as.data.frame(dplyr::slice(sorted_result, start_row:end_row))
-          } else {
-            as.data.frame(sorted_result)
-          }
-
-          build_html_table(
-            dat,
-            total_rows,
-            sort_state = current_sort,
-            ns = ns,
-            page = page,
-            page_size = page_size,
-            table_label = tbl_label
-          )
-        }, error = function(e) {
-          shiny::tags$div(
-            class = "blockr-table-error",
-            style = "color: red; padding: 12px;",
-            paste("Error rendering table:", conditionMessage(e))
-          )
-        })
-      } else {
-        dt_datatable(result, block, session)
-      }
+      # html_table_display case handled above via blockr.ui::html_table_result()
+      dt_datatable(result, block, session)
     } else {
       # Fallback: print method as preformatted text
       shiny::pre(

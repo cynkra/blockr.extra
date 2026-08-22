@@ -4,7 +4,7 @@ library(blockr)
 pkgload::load_all()
 
 # Enable the new HTML table preview (with sorting and pagination)
-options(blockr.html_table_preview = TRUE)
+options(blockr.tabular_display = blockr.ui::html_table_display)
 
 run_app(
   blocks = c(

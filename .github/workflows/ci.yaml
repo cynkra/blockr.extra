@@ -1,0 +1,22 @@
+on:
+  push:
+    branches: main
+  pull_request:
+    branches: main
+  merge_group:
+
+name: ci
+
+jobs:
+  ci:
+    uses: BristolMyersSquibb/blockr.ci/.github/workflows/ci.yaml@main
+    with:
+      # override_blockr_methods() in R/zzz.R deliberately monkey-patches
+      # blockr.core's S3 methods via unlockBinding() -- that's the
+      # function's entire purpose, not an accident, and R CMD check always
+      # flags unlockBinding() as "possibly unsafe". Tolerate the resulting
+      # NOTE rather than gate on it.
+      error-on: '"warning"'
+    secrets: inherit
+    permissions:
+      contents: write

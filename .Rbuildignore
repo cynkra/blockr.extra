@@ -6,3 +6,6 @@
 ^\.playwright-mcp$
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^\.claude$
+^\.github$
+^\.lintr$

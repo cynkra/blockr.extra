@@ -1,0 +1,343 @@
+/* Code block — the CodeMirror editor shown inline on the card.
+ * Hand-rolled to the blockr design system (blockr.docs/design-system): no
+ * framework classes, --blockr-* tokens with literal fallbacks so it renders
+ * standalone. */
+
+.blockr-code-block { width: 100%; margin-bottom: 10px; }
+
+.blockr-code-label {
+  display: block;
+  font-weight: 500;
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-color-text-secondary, #6b7280);
+  margin-bottom: 6px;
+}
+
+/* Bordered frame holding the editor + the flush footer. */
+.blockr-code-frame {
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* The CodeMirror mount. Height tracks content between a min and a max:
+ * short functions don't leave dead space, long ones scroll internally
+ * (the scroller's overflow) instead of pushing the Run bar and the
+ * downstream preview down the page. */
+.blockr-code .cm-editor { min-height: 140px; max-height: 528px; }
+.blockr-code .cm-editor.cm-focused { outline: none; }
+.blockr-code .cm-scroller {
+  overflow: auto;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+/* A little breathing room so the code isn't flush against the frame edges.
+ * Padding on .cm-content keeps the line-number gutter aligned and the diff
+ * line-backgrounds intact. */
+.blockr-code .cm-content { padding: 6px 0; }
+.blockr-code .cm-line { padding-left: 10px; padding-right: 10px; }
+.blockr-code .cm-gutters { padding-left: 2px; }
+
+/* Align the inline hunk (CodeMirror-merge) buttons to blockr.dplyr's
+ * click-through pill (`.blockr-pill`): 11px / weight 500 / 2px 8px / 4px radius,
+ * page font. The light green/red two-tone is kept (semantic diff convention, and
+ * consistent with dplyr's tinted `.blockr-expr-confirm`); only the type scale is
+ * brought down so they read as the same quiet control family. */
+.blockr-code .cm-chunkButtons button {
+  border-radius: 4px;
+  /* These buttons live INSIDE the CodeMirror editor, so `inherit` would pick up
+   * the editor's monospace; pin them to the page font instead (Bootstrap's
+   * body font; design-system default sans). */
+  font-family: var(--bs-body-font-family,
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-weight: 500;
+  font-size: 11px;
+  padding: 2px 8px;
+}
+/* Light two-tone Accept/Reject (same as the footer). !important to beat the
+ * solid #2a2/#d43 from CodeMirror-merge's runtime-injected theme. */
+.blockr-code .cm-chunkButtons button[name="accept"] {
+  background: #e9f9ef !important; color: #15803d !important;
+  border: 1px solid #b7ebcb !important;
+}
+.blockr-code .cm-chunkButtons button[name="reject"] {
+  background: #fdecec !important; color: #b91c1c !important;
+  border: 1px solid #f5c6c6 !important;
+}
+
+/* Flush footer bar (review controls OR Run), attached to the editor's bottom. */
+.blockr-code-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px;
+  /* Constant height across states (review / dirty-Run / rest) so toggling the
+   * footer contents never reflows the block. The empty rest bar keeps this
+   * height too. (Open question: whether a persistent bar is preferable to
+   * collapsing — see .blockr-code-footer--rest.) */
+  box-sizing: border-box;
+  min-height: 35px;
+  border-top: 1px solid var(--blockr-color-border, #e5e7eb);
+  background: var(--blockr-grey-50, #f9fafb);
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+}
+/* Rest state: present (holds the height) but quiet — no actions. */
+.blockr-code-footer--rest { }
+.blockr-code-footer__label {
+  color: var(--blockr-color-text-secondary, #6b7280);
+  /* Let a long syntax-error message ellipsize instead of pushing the actions
+   * (Run) button out of the bar. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.blockr-code-footer__actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* Footer buttons — hand-rolled, no framework. Scoped under .blockr-code-footer
+ * so they win over any ambient .btn rules. Accept/Reject match the inline hunk
+ * buttons (solid green/red); Run uses the design-system tinted-primary confirm. */
+.blockr-code-footer .blockr-code-btn {
+  height: 24px;
+  box-sizing: border-box;
+  /* Flex-center the label so the 1px border doesn't push the text off-centre
+   * (was sitting slightly high). */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Match blockr.dplyr's click-through pill scale: 11px / weight 500 / 2px 8px. */
+  padding: 2px 8px;
+  border: none;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, filter 0.15s ease;
+}
+.blockr-code-footer .blockr-code-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+/* Accept / Reject as light two-tone badges (matches blockr-dock's
+ * `.badge-two-tone`: light tint + same-hue text + subtle border), font
+ * inherited from the page. */
+.blockr-code-footer .blockr-code-btn--accept {
+  background: #e9f9ef; color: #15803d; border: 1px solid #b7ebcb;
+}
+.blockr-code-footer .blockr-code-btn--accept:hover { background: #d6f5e1; }
+.blockr-code-footer .blockr-code-btn--reject {
+  background: #fdecec; color: #b91c1c; border: 1px solid #f5c6c6;
+}
+.blockr-code-footer .blockr-code-btn--reject:hover { background: #fbdcdc; }
+/* Run as the same two-tone badge, in blue. */
+.blockr-code-footer .blockr-code-btn--run {
+  background: #eaf1fd; color: var(--blockr-color-primary, #2563eb);
+  border: 1px solid #c3d6fb;
+}
+.blockr-code-footer .blockr-code-btn--run:hover { background: #dce8fc; }
+/* Muted return-glyph keyboard hint on the Run button (full shortcut on hover
+ * via the button's title). */
+.blockr-code-footer .blockr-code-kbd {
+  margin-left: 5px;
+  opacity: 0.55;
+  font-size: 0.95em;
+}
+/* Disabled Run = pending edit has a syntax error: can't be run. */
+.blockr-code-footer .blockr-code-btn--run:disabled,
+.blockr-code-footer .blockr-code-btn--run[disabled] {
+  background: var(--blockr-grey-200, #f1f3f5);
+  color: var(--blockr-grey-400, #adb5bd);
+  border-color: var(--blockr-grey-300, #dee2e6);
+  cursor: not-allowed;
+}
+/* Red footer label for a syntax error in the pending edit. */
+.blockr-code-footer .blockr-code-syntax-msg {
+  color: var(--blockr-color-danger, #d6336c);
+  font-weight: 600;
+}
+
+/* The container is a query context so the params grid reflows to the *block*
+ * width (set by the dock panel), not the viewport — same idiom as blockr.dplyr. */
+.function-block-container { width: 100%; padding-bottom: 10px; container-type: inline-size; }
+
+/* Params grid — fixed column counts (not auto-fit), so an odd leftover field
+ * keeps its column share instead of stretching to full width. A single field
+ * spans the full row; wide blocks step up to 3 columns, narrow ones collapse
+ * to a single stacked column. */
+.function-block-params { margin-bottom: 8px; }
+
+/* Params grid. Column count is driven by `--fb-cols` (set from R to the field
+ * count, capped at 3) so N fields never leave an empty trailing column — 2
+ * fields fill the row 50/50. Fixed tracks (not auto-fit) mean an odd leftover
+ * keeps its column share instead of stretching to full width. Container
+ * queries only ever step the count *down* on narrower panels. */
+.fb-params-grid {
+  display: grid;
+  gap: 12px 12px;
+  grid-template-columns: repeat(var(--fb-cols, 2), minmax(0, 1fr));
+}
+.fb-params-grid > .block-input-wrapper:only-child {
+  grid-column: 1 / -1;
+}
+@container (max-width: 620px) {
+  .fb-params-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 360px) {
+  .fb-params-grid { grid-template-columns: 1fr; }
+}
+
+/* --- Auto-generated parameter fields ---------------------------------------
+ * Each field is a vertical stack: label on top, control below — matching the
+ * blockr.dplyr popover/field look. Neutralise Bootstrap's default form-group
+ * spacing so the grid gap is the single source of vertical rhythm. */
+.function-block-params .block-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.function-block-params .block-input-wrapper .form-group,
+.function-block-params .block-input-wrapper .shiny-input-container {
+  margin-bottom: 0;
+  width: 100%;
+}
+
+/* Field label — 13px / medium / secondary, consistent across select and
+ * text/number/checkbox fields. */
+.function-block-params .fb-field-label,
+.function-block-params .block-input-wrapper label.control-label,
+.function-block-params .block-input-wrapper .shiny-input-container > label {
+  display: block;
+  font-weight: 500;
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-color-text-secondary, #6b7280);
+  margin-bottom: 5px;
+}
+
+/* Text / number inputs → the shared bordered 42px control.
+ * Scoped to Shiny's `.form-control` only, so the transparent search `<input>`
+ * *inside* a Blockr.Select (`.blockr-select__search`, no `.form-control`) is
+ * never turned into a nested bordered box. */
+.function-block-params .block-input-wrapper .form-control {
+  width: 100%;
+  height: 42px;
+  padding: 8px 12px;
+  font-size: var(--blockr-font-size-base, 0.875rem);
+  color: var(--blockr-color-text-primary, #111827);
+  background-color: var(--blockr-color-bg-input, #f9fafb);
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.function-block-params .block-input-wrapper .form-control:focus {
+  outline: none;
+  background-color: #ffffff;
+  border-color: var(--blockr-color-primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.function-block-params .block-input-wrapper .form-control::placeholder {
+  color: var(--blockr-grey-400, #9ca3af);
+}
+
+/* Checkbox fields keep their inline label to the right of the box. */
+.function-block-params .block-input-wrapper .checkbox label,
+.function-block-params .block-input-wrapper .shiny-input-container .checkbox label {
+  font-weight: 400;
+  font-size: var(--blockr-font-size-base, 0.875rem);
+  color: var(--blockr-color-text-primary, #111827);
+  margin-bottom: 0;
+}
+
+/* --- Gear-toggled inline editor section (authoring surface) ---
+ * The standard gear button (mirrors blockr.dplyr's `.blockr-gear-btn`) toggles
+ * an in-flow section that pushes the content below it down. */
+.blockr-gear-editor { width: 100%; }
+.blockr-gear-header {
+  display: flex; align-items: center; justify-content: flex-end;
+  margin-bottom: 6px;
+}
+.blockr-gear-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex-shrink: 0;
+  color: var(--blockr-grey-400, #9ca3af);
+  background: transparent;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 4px; cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.blockr-gear-btn:hover {
+  color: var(--blockr-color-primary, #2563eb);
+  border-color: rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.04);
+}
+.blockr-gear-btn.blockr-gear-active {
+  color: var(--blockr-color-primary, #2563eb);
+  border-color: rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.08);
+}
+.blockr-gear-section { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
+/* In the gear panel there's more room, so allow a taller floor; both share
+ * the same ~25-row cap (25 * 20.625px line + 12px content padding) before the
+ * editor starts scrolling internally. */
+.blockr-gear-section .blockr-code .cm-editor { min-height: 180px; max-height: 528px; }
+
+/* ---- code block: input lines -------------------------------------------
+ * A top-level assignment of a plain value becomes a control on the card. The
+ * script carries no fence comment saying so, so the editor says it instead:
+ * a tinted band with a left rule on the line, and a gutter glyph naming the
+ * widget. Tokens: primary #2563eb at low alpha, rule at the blue-200 mark. */
+.blockr-code .cm-input-line {
+  background: linear-gradient(
+    90deg,
+    rgba(37, 99, 235, 0.07),
+    rgba(37, 99, 235, 0.02) 70%
+  );
+  box-shadow: inset 2px 0 0 #93b4f0;
+}
+
+/* The glyph column sits between the line numbers and the code. Fixed width so
+ * adding the first input never shifts the code horizontally. */
+.blockr-code .cm-input-gutter {
+  width: 16px;
+  padding: 0;
+}
+.blockr-code .cm-input-glyph {
+  display: block;
+  position: relative;
+  width: 100%;
+  text-align: center;
+  /* Page font, not the editor's monospace: these are UI marks, not code. */
+  font-family: var(--bs-body-font-family,
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-size: 11px;
+  line-height: inherit;
+  color: #93b4f0;
+  cursor: default;
+}
+
+/* The select caret is drawn, not typed: U+25BE and its neighbours are absent
+ * from enough font stacks (headless Chromium among them) to come out blank at
+ * this size, while #, Aa and the check mark render everywhere. */
+.blockr-code .cm-input-glyph[data-kind="select"] {
+  /* Hide the character but keep the box: `font-size: 0` would collapse the
+     line-height-derived height and strand the caret at the top of the line. */
+  color: transparent;
+}
+.blockr-code .cm-input-glyph[data-kind="select"]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  margin: -2px 0 0 -4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  /* Not currentColor: the text above is transparent. */
+  border-top: 4px solid #93b4f0;
+}

@@ -21,7 +21,7 @@ pkgload::load_all("../blockr.dag")
 pkgload::load_all("../blockr.ai")
 pkgload::load_all("../blockr.extra")
 
-options(blockr.html_table_preview = TRUE)
+options(blockr.tabular_display = blockr.ui::html_table_display)
 
 serve(
   new_dock_board(

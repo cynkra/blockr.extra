@@ -9,7 +9,7 @@ pkgload::load_all("blockr.extra")
 
 library(blockr)
 
-options(blockr.html_table_preview = TRUE)
+options(blockr.tabular_display = blockr.ui::html_table_display)
 
 adam_dir <- system.file("extdata", "adam", package = "blockr.dm")
 

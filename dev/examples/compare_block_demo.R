@@ -19,7 +19,7 @@ options(shiny.port = 7860, shiny.launch.browser = FALSE)
 options(
   blockr.dock_is_locked = FALSE,
   blockr.eval_parent_env = asNamespace("stats"), # ai needs this!
-  blockr.html_table_preview = TRUE
+  blockr.tabular_display = blockr.ui::html_table_display
 )
 
 

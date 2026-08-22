@@ -3,40 +3,49 @@
 #' Registers the experimental function blocks with blockr.
 #'
 #' @export
-#' @importFrom blockr.core register_blocks
+#' @importFrom blockr.core register_blocks new_arg_specs new_arg_spec
+#'   arg_string
 register_extra_blocks <- function() {
   blockr.core::register_blocks(
     c(
       "new_function_block",
-      "new_function_xy_block",
+      "new_code_block",
       "new_function_var_block",
       "new_async_function_block",
       "new_broom_summary_block",
       "new_compare_block",
       "new_search_block",
+      "new_latest_block",
+      "new_labeler_block",
       "new_prose_block"
     ),
     name = c(
       "Function block",
-      "Function XY block",
+      "Code block",
       "Function Var block",
       "Async Function block",
       "Broom Summary",
       "Compare",
       "Search",
+      "Latest",
+      "Labeler",
       "Prose"
     ),
     description = c(
-      "Transform data with a custom R function. UI auto-generated from function arguments.",
-      "Transform two data frames (x, y) with a custom R function. UI auto-generated from function arguments.",
+      "Transform data with a custom R function in a CodeMirror editor (syntax highlighting, autocomplete, inline AI diff). UI auto-generated from function arguments.",
+      "Transform data with a plain R script (no wrapper function). Top-level assignments of plain values become controls: a factor renders a dropdown over its levels, a number a spin box, TRUE/FALSE a checkbox. Exports as idiomatic R with the current values written in.",
       "Transform multiple data frames (...) with a custom R function. UI auto-generated from function arguments.",
       "Transform data with a custom R function asynchronously. Requires mirai daemons. Click Run to execute.",
       "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
       "Compare two data frames on key columns and compute diff metrics on measurement columns.",
       "Filter rows by case-insensitive substring match across all columns.",
-      "Rich-text (WYSIWYG) markdown notes with glue data interpolation."
+      "Forward the value of whichever variadic input most recently changed (latest-wins merge / switch). Bridges multiple drill-down charts into one downstream block.",
+      "Add or edit column labels (the `attr(col, \"label\")` attribute shown in column pickers and table headers). Empty label removes it.",
+      "Rich-text (WYSIWYG) markdown notes with glue data interpolation. Data references in braces render as live value chips."
     ),
     category = c(
+      "transform",
+      "transform",
       "transform",
       "transform",
       "transform",
@@ -48,65 +57,130 @@ register_extra_blocks <- function() {
     ),
     icon = c(
       "code-slash",
-      "code-slash",
+      "braces",
       "code-slash",
       "hourglass-split",
       "clipboard-data",
       "arrow-left-right",
       "search",
+      "shuffle",
+      "tag",
       "card-text"
+    ),
+    guidance = c(
+      # new_function_block:
+      # Authored once in inst/prompts/function-block.md; see function_block_prompt().
+      tryCatch(
+        function_block_prompt(),
+        error = function(e) paste(
+          "Write `fn` as `function(data, ...)`; every extra argument needs a",
+          "default whose type picks the UI control (list() -> multi-select,",
+          "c() -> single-select). Prefer dplyr verbs chained with the base",
+          "pipe |>; namespace-prefix calls (dplyr::filter()) and use",
+          ".data[[col]] for string-valued column parameters."
+        )
+      ),
+      # new_code_block:
+      paste(
+        "Write `script` as an ordinary R script that transforms `data` (the",
+        "reserved name for the incoming data frame) and ends with the result.",
+        "Do NOT wrap it in a function and do NOT call one.",
+        "\n\nTo offer the user a control, assign a plain value at the top level:",
+        "a factor renders a dropdown (its LEVELS are the choices, and a value of",
+        "length > 1 makes it a multi-select), a bare number a spin box, a string",
+        "a text box, TRUE/FALSE a checkbox, as.Date() a date picker. Draw the",
+        "levels from the data where that is what you mean, e.g.",
+        "`site <- factor(\"Basel\", unique(data$site))`. A literal is always the",
+        "VALUE, never the choice list.",
+        "\n\nEverything else is code: an assignment whose right-hand side is a",
+        "pipe or any other call is a local variable, not a control.",
+        "\n\nR coding rules: prefer dplyr/tidyr chained with the base pipe |>",
+        "(never %>%). Namespace-prefix every call except base and stats",
+        "(dplyr::filter(), tidyr::pivot_longer())."
+      ),
+      # new_function_var_block:
+      paste(
+        "Write a complete R function as a string. The function receives '...' (any number of data frames) as its first argument.",
+        "\n\nR coding rules: always use the base pipe |> (never %>%).",
+        "Namespace-prefix all functions except base and stats (e.g. dplyr::bind_rows(), stringr::str_detect())."
+      ),
+      # new_async_function_block:
+      "",
+      # new_broom_summary_block:
+      "",
+      # new_compare_block:
+      "",
+      # new_search_block:
+      "",
+      # new_latest_block:
+      "",
+      # new_labeler_block:
+      paste(
+        "Set `labels` to a named list mapping existing column names to",
+        "human-readable label strings. Use an empty string to remove a",
+        "column's label. Columns not present in the data are ignored."
+      ),
+      # new_prose_block:
+      paste(
+        "Write `text` as GFM markdown. Braces hold glue references evaluated",
+        "against the input data, which is bound by its INPUT NAME (usually",
+        "`data`): {nrow(data)}, {data$Species[1]},",
+        "{round(mean(data$mpg), 1)}. A bare {colname} does NOT resolve.",
+        "Braces that are literal text (Quarto attributes, shortcodes) must be",
+        "doubled: {{.callout-note}}."
+      )
     ),
     arguments = list(
       # new_function_block:
-      structure(
-        c(
-          fn = "A string of R code that evaluates to a function. The function must have 'data' as its first argument (the input data frame). Additional arguments with defaults become UI widgets."
-        ),
-        examples = list(
-          fn = "function(data, column = c('Sepal.Length' = 'Sepal.Length', 'Sepal.Width' = 'Sepal.Width'), n = 6L, descending = FALSE) { data <- data[order(data[[column]], decreasing = descending), ]; utils::head(data, n) }"
-        ),
-        prompt = paste(
-          "Write the value of fn as a SINGLE-LINE R function string (no newlines inside the string -- this is critical because the value is embedded in JSON).",
-          "The function MUST have 'data' as its first argument.",
-          "ALL additional parameters MUST have default values -- a parameter without a default will crash the app.",
-          "Default value types map to UI widgets: character vector with multiple elements c('A' = 'a', 'B' = 'b') -> dropdown; single numeric -> number input; single logical -> checkbox; single character string -> text input.",
-          "For dropdown parameters, ALWAYS use a named c() vector where names are display labels and values are the actual values, e.g. column = c('Sepal.Length' = 'Sepal.Length', 'Petal.Width' = 'Petal.Width'). An unnamed c() vector will NOT create a dropdown -- it will break the function.",
-          "Use column names from the actual data provided for any column-selection parameters.",
-          "Wrap the entire function body in curly braces on one line, separating statements with semicolons.",
-          "\n\nR coding rules: always use the base pipe |> (never %>%).",
-          "Namespace-prefix all functions except base and stats (e.g. dplyr::filter(), stringr::str_detect()).",
-          "\n\nData exploration: explore the data structure (e.g. str(data), names(data)) to write a function",
-          "that correctly references available columns and handles their data types.",
-          "When creating dropdown parameters, explore unique values (e.g. unique(data$col) or sort(unique(data$col)))",
-          "so you can populate the c() vector with ALL actual values from the data, not just the ones visible in the preview."
+      new_arg_specs(
+        fn = new_arg_spec(
+          "A string of R code that evaluates to a function. The function must have 'data' as its first argument (the input data frame). Additional arguments with defaults become UI widgets.",
+          # MULTI-LINE and indented (anchors readable output, not one-liners),
+          # demonstrates BOTH a c() single-select (sort_by) AND a list()
+          # multi-select (keep) so the model has the multi-select pattern to
+          # copy, and is written in piped dplyr style (the preferred style; see
+          # inst/prompts/function-block.md) incl. the .data[[col]]/all_of()
+          # patterns for string-valued parameters. Keep in sync with the worked
+          # example at the end of that prompt file.
+          example = paste(
+            "function(data,",
+            "         sort_by = c('Sepal length (cm)' = 'Sepal.Length', 'Sepal width (cm)' = 'Sepal.Width'),",
+            "         keep = list('Sepal length (cm)' = 'Sepal.Length', 'Flower species' = 'Species'),",
+            "         n = 6L) {",
+            "  data |>",
+            "    dplyr::arrange(.data[[sort_by]]) |>",
+            "    dplyr::select(dplyr::all_of(unname(unlist(keep)))) |>",
+            "    dplyr::slice_head(n = n)",
+            "}",
+            sep = "\n"
+          ),
+          type = arg_string()
         )
       ),
-      # new_function_xy_block:
-      structure(
-        c(
-          fn = "A string of R code that evaluates to a function. The function must have 'x' as first and 'y' as second argument (two input data frames). Additional arguments with defaults become UI widgets."
-        ),
-        examples = list(
-          fn = "function(x, y) { dplyr::left_join(x, y, by = 'name') }"
-        ),
-        prompt = paste(
-          "Write a complete R function as a string. The function receives 'x' and 'y' (two data frames) as its first two arguments.",
-          "\n\nR coding rules: always use the base pipe |> (never %>%).",
-          "Namespace-prefix all functions except base and stats (e.g. dplyr::left_join(), stringr::str_detect())."
+      # new_code_block:
+      new_arg_specs(
+        script = new_arg_spec(
+          "A string of R code transforming `data` into the result. Top-level assignments of plain values (literals, c(), factor(), as.Date()) become UI controls; every other statement is code.",
+          # Anchors the two things models get wrong: no function wrapper, and a
+          # factor (not a bare character vector) is how a dropdown is declared.
+          example = paste(
+            "species <- factor(\"setosa\", unique(data$Species))",
+            "n <- 10",
+            "",
+            "data |>",
+            "  dplyr::filter(Species == species) |>",
+            "  dplyr::slice_head(n = n)",
+            sep = "\n"
+          ),
+          type = arg_string()
         )
       ),
       # new_function_var_block:
-      structure(
-        c(
-          fn = "A string of R code that evaluates to a function. The function must have '...' as its first argument (variadic data frame inputs). Additional arguments with defaults become UI widgets."
-        ),
-        examples = list(
-          fn = "function(..., .id = NULL) { dplyr::bind_rows(..., .id = .id) }"
-        ),
-        prompt = paste(
-          "Write a complete R function as a string. The function receives '...' (any number of data frames) as its first argument.",
-          "\n\nR coding rules: always use the base pipe |> (never %>%).",
-          "Namespace-prefix all functions except base and stats (e.g. dplyr::bind_rows(), stringr::str_detect())."
+      new_arg_specs(
+        fn = new_arg_spec(
+          "A string of R code that evaluates to a function. The function must have '...' as its first argument (variadic data frame inputs). Additional arguments with defaults become UI widgets.",
+          example = "function(..., .id = NULL) { dplyr::bind_rows(..., .id = .id) }",
+          type = arg_string()
         )
       ),
       # new_async_function_block:
@@ -117,25 +191,23 @@ register_extra_blocks <- function() {
       NULL,
       # new_search_block:
       NULL,
+      # new_latest_block:
+      NULL,
+      # new_labeler_block:
+      # `labels` is an arbitrary-key map (column name -> label), which has
+      # no JSON-Schema subset — left untyped like blockr.dplyr's `renames`.
+      new_arg_specs(
+        labels = new_arg_spec(
+          "Named list mapping column names to label strings. An empty string removes the column's label.",
+          example = 'list(mpg = "Miles per gallon", cyl = "Number of cylinders")'
+        )
+      ),
       # new_prose_block:
-      structure(
-        c(
-          text = paste(
-            "Markdown string for the note. May embed glue references in braces",
-            "that are evaluated by glue::glue() against the input data, which is",
-            "bound by its input name (e.g. `data`). Use `{nrow(data)}`,",
-            "`{data$colname}`, `{round(mean(data$mpg), 1)}` -- a bare `{colname}`",
-            "does NOT resolve. GFM markdown supported."
-          )
-        ),
-        examples = list(
-          text = "## Summary\n\nThe dataset has **{nrow(data)}** rows."
-        ),
-        prompt = paste(
-          "Return GitHub-Flavored Markdown.",
-          "Glue references must reference the input by name (`data`), e.g.",
-          "{nrow(data)} or {data$Species}, never a bare column name.",
-          "Explore the data (names(data), str(data)) so references are valid."
+      new_arg_specs(
+        text = new_arg_spec(
+          "Markdown string for the note. Braces hold glue references evaluated against the input data, bound by input name (e.g. `data`); literal braces must be doubled.",
+          example = "## Summary\n\nThe dataset has **{nrow(data)}** rows.",
+          type = arg_string()
         )
       )
     ),

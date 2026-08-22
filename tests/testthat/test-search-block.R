@@ -5,14 +5,27 @@ testServer <- shiny::testServer
 # --- make_search_expr() unit tests ---
 
 test_that("empty string produces a passthrough expression", {
-  passthrough <- quote(dplyr::filter(data))
+  passthrough <- bquote(dplyr::filter(.(d)), list(d = data_slot()))
   expect_identical(blockr.extra:::make_search_expr(""), passthrough)
   expect_identical(blockr.extra:::make_search_expr("   "), passthrough)
   expect_identical(blockr.extra:::make_search_expr("\t\n"), passthrough)
 
   # and evaluating it returns the data unchanged
-  data <- datasets::iris
-  expect_equal(eval(passthrough), datasets::iris)
+  expect_equal(eval_bquoted(passthrough, datasets::iris), datasets::iris)
+})
+
+test_that("the emitted expression carries the data SLOT, never a bare `data`", {
+  # `expr_type = "bquoted"` means only `.()` terms are substituted -- a free
+  # `data` symbol survives into the exported script, resolves to `utils::data`
+  # and takes every downstream block down. Both branches must emit `.(data)`.
+  for (string in list("", "   ", "BBD02")) {
+    expr <- blockr.extra:::make_search_expr(string)
+    expect_false(has_bare_data(expr))
+    expect_identical(expr[[2L]], data_slot())
+  }
+
+  # The guard must actually be able to fail -- the pre-fix shape.
+  expect_true(has_bare_data(quote(dplyr::filter(data))))
 })
 
 test_that("non-empty string produces a filter expression with the search string", {
@@ -23,7 +36,46 @@ test_that("non-empty string produces a filter expression with the search string"
   expect_match(s, "dplyr::filter")
   expect_match(s, "dplyr::if_any")
   expect_match(s, "BBD02")
-  expect_match(s, "ignore_case = TRUE")
+  expect_match(s, "ignore.case = TRUE")
+})
+
+test_that("the generated filter reads like one a person would write", {
+  # This expression is shown to humans in the exported report, so its shape
+  # is part of the contract: no as.character() wrapper, no stringr::fixed()
+  # dance -- grepl() coerces its input and takes ignore.case directly.
+  expr <- blockr.extra:::make_search_expr("BBD02")
+  resolved <- do.call(
+    bquote, list(expr, list(data = as.name("adae")))
+  )
+
+  expect_identical(
+    deparse1(resolved),
+    paste0(
+      "dplyr::filter(adae, dplyr::if_any(dplyr::everything(), ",
+      "function(x) grepl(\"BBD02\", x, ignore.case = TRUE)))"
+    )
+  )
+
+  expect_no_match(deparse1(resolved), "stringr", fixed = TRUE)
+  expect_no_match(deparse1(resolved), "as.character", fixed = TRUE)
+})
+
+test_that("regex metacharacters in the search string match literally", {
+  data <- data.frame(x = c("1.5", "125", "a(b)", "axb"))
+
+  # "1.5" must not match "125" -- the search box means substring, not regex.
+  expect_identical(
+    eval_bquoted(blockr.extra:::make_search_expr("1.5"), data)$x, "1.5"
+  )
+  expect_identical(
+    eval_bquoted(blockr.extra:::make_search_expr("a(b)"), data)$x, "a(b)"
+  )
+
+  # An ordinary term is emitted untouched, which is the readable case.
+  expect_match(
+    deparse1(blockr.extra:::make_search_expr("setosa")), "\"setosa\"",
+    fixed = TRUE
+  )
 })
 
 test_that("search expression filters rows on substring match", {
@@ -33,7 +85,7 @@ test_that("search expression filters rows on substring match", {
     stringsAsFactors = FALSE
   )
 
-  result <- eval(blockr.extra:::make_search_expr("BBD02"))
+  result <- eval_bquoted(blockr.extra:::make_search_expr("BBD02"), data)
 
   # both the lowercase id and the mid-of-string note match (case-insensitive)
   expect_equal(nrow(result), 2L)
@@ -43,7 +95,7 @@ test_that("search expression filters rows on substring match", {
 test_that("search expression is case-insensitive", {
   data <- data.frame(x = c("Setosa", "SETOSA", "other"), stringsAsFactors = FALSE)
 
-  result <- eval(blockr.extra:::make_search_expr("setosa"))
+  result <- eval_bquoted(blockr.extra:::make_search_expr("setosa"), data)
 
   expect_equal(nrow(result), 2L)
 })
@@ -55,7 +107,7 @@ test_that("search expression handles NA cells without crashing", {
     stringsAsFactors = FALSE
   )
 
-  result <- eval(blockr.extra:::make_search_expr("foo"))
+  result <- eval_bquoted(blockr.extra:::make_search_expr("foo"), data)
 
   expect_equal(nrow(result), 1L)
   expect_equal(result$x, "foo")
@@ -69,18 +121,19 @@ test_that("search expression matches across numeric, factor, and date columns", 
     stringsAsFactors = FALSE
   )
 
-  # numeric match
-  expect_equal(nrow(eval(blockr.extra:::make_search_expr("123"))), 1L)
-  # factor match
-  expect_equal(nrow(eval(blockr.extra:::make_search_expr("alpha"))), 1L)
-  # date match (ISO format)
-  expect_equal(nrow(eval(blockr.extra:::make_search_expr("2024-06"))), 1L)
+  hits <- function(string) {
+    nrow(eval_bquoted(blockr.extra:::make_search_expr(string), data))
+  }
+
+  expect_equal(hits("123"), 1L)      # numeric match
+  expect_equal(hits("alpha"), 1L)    # factor match
+  expect_equal(hits("2024-06"), 1L)  # date match (ISO format)
 })
 
 test_that("search expression returns empty when nothing matches", {
   data <- data.frame(x = c("a", "b", "c"), stringsAsFactors = FALSE)
 
-  result <- eval(blockr.extra:::make_search_expr("zzz"))
+  result <- eval_bquoted(blockr.extra:::make_search_expr("zzz"), data)
 
   expect_equal(nrow(result), 0L)
 })

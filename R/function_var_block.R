@@ -69,20 +69,38 @@ new_function_var_block <- function(
   parsed <- parse_function_code(fn)
   validate_function_args(parsed, "...", "Function must have '...' as its first argument")
 
-  # Helper function to extract argument names for variadic blocks
-  dot_args_names <- function(x) {
-    res <- names(x)
-    unnamed <- grepl("^[1-9][0-9]*$", res)
+  # Variadic ...args helpers, mirroring blockr.core (not exported). Unnamed
+  # slots (added by dragging an edge in the DAG UI) are stored positionally, so
+  # names(...args) is "" / NULL for them; the old names-based helper collapsed
+  # that to NULL, dropping the connected input (do.call with no data). Each slot
+  # is bound in the eval env under a symbol: the link name, or .arg1/.arg2/...
+  # for unnamed ones. dot_arg_refs() returns those symbols keyed by display
+  # name; dot_arg_values() pairs them with realized values. Keep in sync with
+  # blockr.core R/utils-misc.R.
+  dot_sym <- function(i) {
+    paste0(".arg", i)
+  }
 
-    if (all(unnamed)) {
-      return(NULL)
+  arg_refs <- function(nms) {
+    unnamed <- !nzchar(nms)
+    replace(nms, unnamed, dot_sym(seq_len(sum(unnamed))))
+  }
+
+  dot_arg_refs <- function(x) {
+    nms <- names(x)
+    if (is.null(nms)) {
+      nms <- character(length(x))
     }
+    stats::setNames(arg_refs(nms), nms)
+  }
 
-    if (any(unnamed)) {
-      return(replace(res, unnamed, ""))
+  dot_arg_values <- function(x) {
+    vals <- if (inherits(x, "reactivevalues")) {
+      shiny::reactiveValuesToList(x)
+    } else {
+      as.list(x)
     }
-
-    res
+    stats::setNames(vals, unname(dot_arg_refs(x)))
   }
 
   blockr.core::new_block(
@@ -102,9 +120,26 @@ new_function_var_block <- function(
             strip_leading_dot = TRUE
           )
 
-          # Get argument names for variadic inputs
+          # The shared Blockr.Code editor (autocomplete over all inputs' cols).
+          setup_code_editor_server(
+            input, output, session, base,
+            cols = shiny::reactive({
+              vals <- dot_arg_values(...args)
+              unique(unlist(lapply(vals, function(v) {
+                tryCatch(
+                  names(if (shiny::is.reactive(v)) v() else v),
+                  error = function(e) NULL
+                )
+              })))
+            }),
+            required_args = "...",
+            contract_message = "Function must have '...' as its first argument"
+          )
+
+          # Eval-env symbols for the connected inputs (.arg1, .arg2, ... for
+          # unnamed DAG-UI slots, else the link name); reactive on the link set.
           arg_names <- shiny::reactive(
-            stats::setNames(names(...args), dot_args_names(...args))
+            dot_arg_refs(...args)
           )
 
           # Build expression
@@ -145,10 +180,19 @@ new_function_var_block <- function(
       )
     },
     dat_valid = function(...args) {
-      stopifnot(length(...args) >= 1L)
+      # Zero inputs is allowed: with `...` the block can act as a pure source
+      # (e.g. open a DB connection / read a file in the body and return a
+      # table), so it does not require any upstream data. One or more inputs
+      # is the merge / bind use.
+      TRUE
     },
     class = "function_var_block",
-    allow_empty_state = TRUE,
+    # `input = TRUE` keeps the `fn` state field from wedging when cleared;
+    # `data = list(...args = 0)` tells core the block needs ZERO variadic
+    # inputs, so it can act as a pure source (read a file / open a DB in the
+    # body) instead of sitting in "waiting" on start. Without the `...args`
+    # entry, core defaults min_args to 1L and gates the block on one input.
+    allow_empty_state = list(input = TRUE, data = list(...args = 0L)),
     external_ctrl = "fn",
     ...
   )

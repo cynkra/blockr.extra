@@ -10,12 +10,11 @@
 #'
 #' @return A transform block of class `search_block`.
 #'
-#' @importFrom stringr str_detect fixed
 #' @examples
 #' if (interactive()) {
 #'   library(blockr.core)
 #'   library(blockr.extra)
-#'   options(blockr.html_table_preview = TRUE)
+#'   options(blockr.tabular_display = blockr.ui::html_table_display)
 #'   serve(new_search_block(), data = list(data = iris))
 #' }
 #'
@@ -78,22 +77,59 @@ new_search_block <- function(string = "", ...) {
 #'
 #' @noRd
 make_search_expr <- function(string) {
+
+  # The data SLOT -- the literal `.(data)` placeholder -- never a free `data`
+  # symbol. The block declares `expr_type = "bquoted"`, so blockr substitutes
+  # only `.()` terms and does NOT wrap the expression in `with(args, ...)`.
+  # A bare `data` therefore works in the app (the runtime env binds it) and
+  # silently breaks every EXPORT: blockr.outline emits the symbol verbatim,
+  # it resolves up the search path to `utils::data` (a function), and each
+  # downstream block dies with "no applicable method for 'filter' applied to
+  # an object of class 'function'".
+  #
+  # Built by hand rather than through blockr.core::bbquote(): the expression
+  # below DEFINES A FUNCTION, and bbquote()'s splice pass deletes a function
+  # definition's NULL srcref slot -- present whenever the code was parsed
+  # without srcrefs, i.e. from an INSTALLED package. That crashes with
+  # "'names' attribute [4] must be the same length as the vector [3]" in
+  # production while passing every load_all() dev session.
+  dat <- call(".", as.name("data"))
+
   if (!nzchar(trimws(string))) {
     # dplyr::filter() with no conditions returns the data unchanged;
     # keeps the expression a language object (not a bare symbol).
-    return(quote(dplyr::filter(data)))
+    return(bquote(dplyr::filter(.(d)), list(d = dat)))
   }
+
+  # grepl() rather than stringr::str_detect(): this expression is read by
+  # humans in the generated report, so it should look like the filter someone
+  # would have written. grepl() coerces its input through as.character()
+  # itself -- factors, numerics and Dates all just work -- and takes
+  # `ignore.case` directly, which removes both the as.character() wrapper and
+  # the stringr::fixed(..., ignore_case = TRUE) dance the previous form
+  # needed. It also drops stringr from the generated code's dependencies.
   bquote(
     dplyr::filter(
-      data,
+      .(d),
       dplyr::if_any(
         dplyr::everything(),
-        function(.col) stringr::str_detect(
-          as.character(.col),
-          stringr::fixed(.(s), ignore_case = TRUE)
-        )
+        function(x) grepl(.(p), x, ignore.case = TRUE)
       )
     ),
-    list(s = string)
+    list(d = dat, p = escape_regex(string))
   )
+}
+
+#' Escape regex metacharacters
+#'
+#' The search box means literal substring: typing `1.5` must not match `125`.
+#' `grepl()` is used in regex mode (its `fixed = TRUE` silently ignores
+#' `ignore.case`), so the search string is escaped instead. Ordinary terms
+#' come through untouched, which is what keeps the generated code readable.
+#'
+#' @param x A character string.
+#' @return `x` with regex metacharacters backslash-escaped.
+#' @noRd
+escape_regex <- function(x) {
+  gsub("([][{}().^$*+?|\\\\])", "\\\\\\1", x)
 }

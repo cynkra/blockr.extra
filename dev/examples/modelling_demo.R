@@ -5,7 +5,7 @@ pkgload::load_all()
 pkgload::load_all("../blockr.extra")
 
 # Enable the new HTML table preview
-options(blockr.html_table_preview = TRUE)
+options(blockr.tabular_display = blockr.ui::html_table_display)
 
 run_app(
   blocks = c(
