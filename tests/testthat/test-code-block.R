@@ -397,3 +397,72 @@ test_that("the footer says how many controls the script produced", {
   p0 <- cb_parse('utils::head(data)')
   expect_match(cb_rest_label(cb_specs(p0, iris), p0), "^no inputs")
 })
+
+# ---- hiding a panel must not disturb the expression ------------------------
+
+test_that("a declaration that reads the data survives the data going away", {
+  # The visibility gate makes `data()` THROW while a block's panel is hidden,
+  # not merely go stale. Recomputing the specs against that absence produced an
+  # error spec, cb_expr() dropped the declaration as unusable, and the emitted
+  # expression silently lost its substitution -- referring to a symbol nothing
+  # defines. Coming back restored the good expression, so the block re-evaluated
+  # on every tab switch.
+  script <- paste(
+    'pick <- factor(data$Species[1], levels(data$Species))',
+    '',
+    'subset(data, Species == pick)',
+    sep = "\n"
+  )
+  block <- new_code_block(script = script)
+
+  on_screen <- shiny::reactiveVal(TRUE)
+  data_slot <- function() {
+    if (!on_screen()) {
+      shiny::req(FALSE)     # what the gate does to a hidden block
+    }
+    datasets::iris
+  }
+
+  testServer(
+    blockr.core::get_s3_method("block_server", block),
+    {
+      session$flushReact()
+
+      shown <- session$returned$expr()
+      expect_true(is.call(shown))
+      # the declaration is inlined as a literal, not left as a bare symbol
+      expect_false(any(grepl("pick", deparse(shown), fixed = TRUE)))
+      expect_true(any(grepl("setosa", deparse(shown), fixed = TRUE)))
+
+      on_screen(FALSE)      # panel hidden: data() now throws
+      session$flushReact()
+      expect_equal(session$returned$expr(), shown)
+
+      on_screen(TRUE)       # and shown again
+      session$flushReact()
+      expect_equal(session$returned$expr(), shown)
+    },
+    args = list(x = block, data = list(data = data_slot))
+  )
+})
+test_that("specs are kept, not degraded, when the data is unavailable", {
+  # The unit the fix turns on: cb_specs() against NULL yields an error spec, so
+  # the block must hold the last good one instead of adopting it.
+  script <- 'pick <- factor(data$Species[1], levels(data$Species))\n\nsubset(data, Species == pick)'
+  p <- cb_parse(script)
+
+  good <- cb_specs(p, datasets::iris)
+  degraded <- cb_specs(p, NULL)
+
+  expect_length(good, 1L)
+  expect_null(good[[1L]]$error)
+  expect_false(is.na(good[[1L]]$kind))
+
+  # this is what the block must never adopt
+  expect_length(degraded, 1L)
+  expect_false(is.null(degraded[[1L]]$error))
+
+  # and what it costs if it does: the substitution disappears
+  expect_true(any(grepl("setosa", deparse(cb_expr(p, good, list())), fixed = TRUE)))
+  expect_true(any(grepl("pick", deparse(cb_expr(p, degraded, list())), fixed = TRUE)))
+})

@@ -73,10 +73,35 @@ new_code_block <- function(script = "n <- 6\n\nutils::head(data, n)",
           # factor's levels track the data rather than being frozen at
           # authoring time. Before data arrives they evaluate against NULL,
           # which simply yields an error spec for the ones that need it.
-          r_specs <- shiny::reactive({
+          # NEVER DEGRADE THE SPECS WHEN THE DATA IS MOMENTARILY GONE. `data()`
+          # is not merely stale while a panel is hidden -- the visibility gate
+          # makes it throw, so `dat` becomes NULL. `cb_specs()` then cannot
+          # evaluate a declaration like `cyl <- factor(unique(data$cyl))`,
+          # returns an error spec, and `cb_expr()` drops it as unusable: the
+          # emitted expression silently loses its substitution and refers to a
+          # symbol nothing defines. Coming back flips it to the good expression
+          # again, so the block genuinely re-evaluated on every tab switch.
+          #
+          # Keeping the last good specs while the data is unavailable removes
+          # that flip-flop, and the identical() guard stops an unchanged
+          # recomputation from propagating. Live data still drives the choices:
+          # a real upstream change gives a non-NULL, different `dat`, so the
+          # specs recompute and the control updates.
+          r_specs_val <- shiny::reactiveVal(NULL)
+
+          shiny::observe({
             dat <- tryCatch(data(), error = function(e) NULL)
-            cb_specs(r_parsed(), dat)
+            prev <- shiny::isolate(r_specs_val())
+            if (is.null(dat) && !is.null(prev)) {
+              return()
+            }
+            specs <- cb_specs(r_parsed(), dat)
+            if (!identical(specs, prev)) {
+              r_specs_val(specs)
+            }
           })
+
+          r_specs <- shiny::reactive(r_specs_val())
 
           # The controls. Seeded from the current values (so a restored board
           # comes back with its knobs where the user left them) but NOT
@@ -151,13 +176,30 @@ new_code_block <- function(script = "n <- 6\n\nutils::head(data, n)",
             rest_label = shiny::reactive(cb_rest_label(r_specs(), r_parsed()))
           )
 
+          # THE EXPRESSION MUST NOT RE-FIRE WHEN NOTHING ABOUT IT CHANGED.
+          # `r_specs()` reads `data()` so that a declaration's choices track the
+          # live data (see above), which means this recomputes whenever the
+          # upstream data reactive churns -- including every time a hidden panel
+          # is shown again, when the visibility gate re-opens. Core re-evaluates
+          # the block on any firing of `expr`, without comparing, so the block
+          # re-ran on every tab switch and a `Sys.time()` in a script visibly
+          # changed. Holding the last expression and publishing only on a real
+          # change keeps the live-data specs and stops the spurious re-runs.
+          r_expr <- shiny::reactiveVal(NULL)
+
+          shiny::observe({
+            parsed <- r_parsed()
+            shiny::req(parsed$ok)
+            expr <- cb_expr(parsed, r_specs(), r_values())
+            shiny::req(expr)
+            if (!identical(expr, shiny::isolate(r_expr()))) {
+              r_expr(expr)
+            }
+          })
+
           list(
             expr = shiny::reactive({
-              parsed <- r_parsed()
-              shiny::req(parsed$ok)
-              expr <- cb_expr(parsed, r_specs(), r_values())
-              shiny::req(expr)
-              expr
+              shiny::req(r_expr())
             }),
             state = list(
               script = r_script,
