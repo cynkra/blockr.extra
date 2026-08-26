@@ -211,5 +211,5 @@ block_ui.function_var_block <- function(id, x, ...) {
 
 #' @export
 block_output.function_var_block <- function(x, result, session) {
-  render_dynamic_output(result, x, session)
+  block_result_output(result, x, session)
 }

@@ -275,5 +275,5 @@ block_ui.code_block <- function(id, x, ...) {
 
 #' @export
 block_output.code_block <- function(x, result, session) {
-  render_dynamic_output(result, x, session)
+  block_result_output(result, x, session)
 }
