@@ -466,3 +466,61 @@ test_that("specs are kept, not degraded, when the data is unavailable", {
   expect_true(any(grepl("setosa", deparse(cb_expr(p, good, list())), fixed = TRUE)))
   expect_true(any(grepl("pick", deparse(cb_expr(p, degraded, list())), fixed = TRUE)))
 })
+
+test_that("building the controls runs the header, never the body", {
+  # The point of `data` being in scope for a declaration is that a select's
+  # choices can come from the data (`factor("F", unique(data$SEX))`). Paying
+  # for that with a second run of the block's pipeline would be a bad trade:
+  # the pipeline is the expensive part, and it already runs once as the
+  # block's expr.
+  #
+  # Counted through options() rather than a helper function on purpose:
+  # cb_specs() evaluates in blockr.core::eval_env(), whose parent is
+  # baseenv(), so nothing from the test's own scope would be reachable.
+  on.exit(options(cb_body = NULL, cb_helper = NULL), add = TRUE)
+  options(cb_body = 0L, cb_helper = 0L)
+  bump <- "options(cb_%s = getOption('cb_%s') + 1L)"
+
+  script <- paste(
+    "sex <- factor('F', levels = sort(unique(data$SEX)))",
+    paste0("unused <- { ", sprintf(bump, "helper", "helper"), "; c('F', 'M') }"),
+    paste0("out <- { ", sprintf(bump, "body", "body"), "; 42 }"),
+    "out",
+    sep = "\n"
+  )
+
+  specs <- cb_specs(
+    cb_parse(script),
+    data.frame(SEX = c("F", "M", "F"), stringsAsFactors = FALSE)
+  )
+
+  # The declaration was evaluated, and its choices came off the data.
+  expect_length(specs, 1L)
+  expect_identical(specs[[1L]]$kind, "select")
+  expect_identical(specs[[1L]]$choices, c("F", "M"))
+
+  # Nothing else was. The body never ran, and the helper no declaration reads
+  # stayed unforced behind its lazy binding (cb_delay).
+  expect_identical(getOption("cb_body"), 0L)
+  expect_identical(getOption("cb_helper"), 0L)
+})
+
+test_that("a helper a declaration actually reads is forced, once", {
+  on.exit(options(cb_helper = NULL), add = TRUE)
+  options(cb_helper = 0L)
+
+  script <- paste(
+    "lv <- { options(cb_helper = getOption('cb_helper') + 1L); c('a', 'b') }",
+    "pick <- factor('a', levels = lv)",
+    "also <- factor('b', levels = lv)",
+    "nrow(data)",
+    sep = "\n"
+  )
+
+  specs <- cb_specs(cb_parse(script), data.frame(x = 1))
+
+  expect_identical(vapply(specs, `[[`, character(1L), "kind"),
+                   c("select", "select"))
+  # Read by two declarations, evaluated once: the active binding caches.
+  expect_identical(getOption("cb_helper"), 1L)
+})
