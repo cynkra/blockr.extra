@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Code block params — density ideas</title>
+<style>
+  :root {
+    --text: #111827; --text2: #6b7280; --text3: #9ca3af;
+    --border: #e5e7eb; --bg-input: #f9fafb; --primary: #2563eb;
+    --chip-bg: #eef1f5; --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 40px 80px;
+    font-family: Inter, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; color: var(--text); background: #f3f4f6;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--text2); margin-bottom: 28px; }
+  h2 { font-size: 15px; margin: 40px 0 2px; }
+  .why { color: var(--text2); font-size: 13px; margin: 0 0 12px; max-width: 72ch; }
+  .card {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; max-width: 1120px;
+  }
+  .verdict { font-size: 12px; color: var(--text3); margin-top: 8px; }
+
+  /* ---------- shared field anatomy ---------- */
+  .grid { display: grid; gap: 12px; }
+  .cols3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .cols4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .field { min-width: 0; }
+  .lbl {
+    display: block; font-size: 13px; font-weight: 500;
+    color: var(--text2); margin-bottom: 5px;
+  }
+  .ctl {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    min-height: 42px; padding: 6px 10px;
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--chip-bg); border-radius: 6px;
+    padding: 3px 8px; font-size: 13px; white-space: nowrap;
+  }
+  .chip .x { color: var(--text3); font-size: 12px; cursor: pointer; }
+  .txt { border: none; background: none; font: inherit; color: var(--text);
+         min-width: 40px; flex: 1; outline: none; }
+
+  /* B: one-line chips + overflow counter. The chips clip inside their own
+     flex item; the counter sits outside it, so it can never be clipped. */
+  .oneline { flex-wrap: nowrap; }
+  .clip { display: flex; gap: 6px; overflow: hidden; flex: 1 1 auto; min-width: 0; }
+  .more {
+    flex: none; margin-left: auto; font-size: 12px; font-weight: 500;
+    color: var(--primary); background: #eff3fe;
+    border-radius: 6px; padding: 3px 7px; cursor: pointer;
+  }
+
+  /* C: summary text instead of chips */
+  .summary { flex-wrap: nowrap; justify-content: space-between; cursor: pointer; }
+  .summary .val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .count {
+    flex: none; font-size: 12px; font-weight: 600; color: var(--text2);
+    background: var(--chip-bg); border-radius: 10px; padding: 2px 8px;
+  }
+  .caret { flex: none; color: var(--text3); font-size: 11px; }
+
+  /* D: label inside the control */
+  .inlab { position: relative; }
+  .inlab .lbl {
+    position: absolute; top: -7px; left: 10px; margin: 0;
+    background: #fff; padding: 0 5px; font-size: 11px;
+  }
+  .inlab .ctl { background: #fff; }
+
+  /* E: row layout */
+  .rows .field { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 10px; }
+  .rows .lbl { margin: 0; }
+  .rows .ctl { min-height: 36px; padding: 4px 8px; }
+  .rows { gap: 8px; }
+</style>
+</head>
+<body>
+
+<h1>Code block params — density ideas</h1>
+<div class="sub">The Demo 2 block from the screenshot: two big multi-selects, one small one, one text box.
+Same content in every variant; only the field anatomy changes.</div>
+
+<!-- ================= BASELINE ================= -->
+<h2>Baseline — what ships today</h2>
+<p class="why">3 columns, chips wrap freely. Two selects with many picks grow tall and every field has a different height, which is the cluttered look.</p>
+<div class="card">
+  <div class="grid cols3">
+    <div class="field"><span class="lbl">Numeric Stats</span>
+      <div class="ctl">
+        <span class="chip">n <span class="x">×</span></span>
+        <span class="chip">Mean (SD) <span class="x">×</span></span>
+        <span class="chip">Median <span class="x">×</span></span>
+        <span class="chip">25%, 75% <span class="x">×</span></span>
+        <span class="chip">Min, Max <span class="x">×</span></span>
+      </div></div>
+    <div class="field"><span class="lbl">Vars</span>
+      <div class="ctl">
+        <span class="chip">AGE <span class="x">×</span></span>
+        <span class="chip">DSDIAG <span class="x">×</span></span>
+        <span class="chip">ETHNIC <span class="x">×</span></span>
+        <span class="chip">RACE <span class="x">×</span></span>
+        <span class="chip">REGION <span class="x">×</span></span>
+        <span class="chip">SEX <span class="x">×</span></span>
+        <span class="chip">TRT <span class="x">×</span></span>
+      </div></div>
+    <div class="field"><span class="lbl">Pool members</span>
+      <div class="ctl">
+        <span class="chip">NOT REPORTED <span class="x">×</span></span>
+        <span class="chip">M <span class="x">×</span></span>
+      </div></div>
+    <div class="field"><span class="lbl">Pool name</span>
+      <div class="ctl"><input class="txt" value="Pool"></div></div>
+  </div>
+</div>
+
+<!-- ================= A ================= -->
+<h2>A — step to 4 columns on wide blocks</h2>
+<p class="why">One CSS change: cap <code>--fb-cols</code> at 4 and let a container query step down. Everything fits one row here, but a select with many picks still wraps tall — narrower columns can even make that worse.</p>
+<div class="card">
+  <div class="grid cols4">
+    <div class="field"><span class="lbl">Numeric Stats</span>
+      <div class="ctl">
+        <span class="chip">n <span class="x">×</span></span>
+        <span class="chip">Mean (SD) <span class="x">×</span></span>
+        <span class="chip">Median <span class="x">×</span></span>
+        <span class="chip">25%, 75% <span class="x">×</span></span>
+        <span class="chip">Min, Max <span class="x">×</span></span>
+      </div></div>
+    <div class="field"><span class="lbl">Vars</span>
+      <div class="ctl">
+        <span class="chip">AGE <span class="x">×</span></span>
+        <span class="chip">DSDIAG <span class="x">×</span></span>
+        <span class="chip">ETHNIC <span class="x">×</span></span>
+        <span class="chip">RACE <span class="x">×</span></span>
+        <span class="chip">REGION <span class="x">×</span></span>
+        <span class="chip">SEX <span class="x">×</span></span>
+        <span class="chip">TRT <span class="x">×</span></span>
+      </div></div>
+    <div class="field"><span class="lbl">Pool members</span>
+      <div class="ctl">
+        <span class="chip">NOT REPORTED <span class="x">×</span></span>
+        <span class="chip">M <span class="x">×</span></span>
+      </div></div>
+    <div class="field"><span class="lbl">Pool name</span>
+      <div class="ctl"><input class="txt" value="Pool"></div></div>
+  </div>
+  <div class="verdict">Verdict: cheap, worth doing regardless — but it does not fix the tall selects.</div>
+</div>
+
+<!-- ================= B ================= -->
+<h2>B — one-line selects with an overflow counter</h2>
+<p class="why">The multi-select never wraps: it shows the chips that fit on one 42px line and folds the rest into a <b>+N</b> counter. The full chip list lives in the open dropdown, where there is room. Every field is exactly one row tall, so the grid is a calm lattice whatever the pick counts.</p>
+<div class="card">
+  <div class="grid cols4">
+    <div class="field"><span class="lbl">Numeric Stats</span>
+      <div class="ctl oneline">
+        <span class="clip"><span class="chip">n <span class="x">×</span></span></span>
+        <span class="more">+4</span>
+      </div></div>
+    <div class="field"><span class="lbl">Vars</span>
+      <div class="ctl oneline">
+        <span class="clip"><span class="chip">AGE <span class="x">×</span></span></span>
+        <span class="more">+6</span>
+      </div></div>
+    <div class="field"><span class="lbl">Pool members</span>
+      <div class="ctl oneline">
+        <span class="clip"><span class="chip">NOT REPORTED <span class="x">×</span></span>
+        <span class="chip">M <span class="x">×</span></span>
+      </div></div>
+    <div class="field"><span class="lbl">Pool name</span>
+      <div class="ctl oneline"><input class="txt" value="Pool"></div></div>
+  </div>
+  <div class="verdict">Verdict: the main fix. Uniform height, still shows real values, one click away from the full list.</div>
+</div>
+
+<!-- ================= C ================= -->
+<h2>C — summary text, chips only when open</h2>
+<p class="why">The closed control is quieter still: the joined values as plain text with a count pill, no chips at all. Reads like a sentence, edits like a dropdown. The trade: you cannot remove one pick without opening it.</p>
+<div class="card">
+  <div class="grid cols4">
+    <div class="field"><span class="lbl">Numeric Stats</span>
+      <div class="ctl summary"><span class="val">n, Mean (SD), Median, …</span><span class="count">5</span><span class="caret">▾</span></div></div>
+    <div class="field"><span class="lbl">Vars</span>
+      <div class="ctl summary"><span class="val">AGE, DSDIAG, ETHNIC, …</span><span class="count">7</span><span class="caret">▾</span></div></div>
+    <div class="field"><span class="lbl">Pool members</span>
+      <div class="ctl summary"><span class="val">NOT REPORTED, M</span><span class="count">2</span><span class="caret">▾</span></div></div>
+    <div class="field"><span class="lbl">Pool name</span>
+      <div class="ctl"><input class="txt" value="Pool"></div></div>
+  </div>
+  <div class="verdict">Verdict: maximum calm, minimum glanceability. Better for locked/prod boards than for authoring.</div>
+</div>
+
+<!-- ================= D ================= -->
+<h2>D — label inside the border</h2>
+<p class="why">The label row is half of every field's height. Move it onto the border (notched, 11px) and the band flattens by ~20px per row. Combines with B or C.</p>
+<div class="card">
+  <div class="grid cols4" style="padding-top: 8px;">
+    <div class="field inlab"><span class="lbl">Numeric Stats</span>
+      <div class="ctl oneline">
+        <span class="clip"><span class="chip">n <span class="x">×</span></span></span>
+        <span class="more">+4</span>
+      </div></div>
+    <div class="field inlab"><span class="lbl">Vars</span>
+      <div class="ctl oneline">
+        <span class="clip"><span class="chip">AGE <span class="x">×</span></span></span>
+        <span class="more">+6</span>
+      </div></div>
+    <div class="field inlab"><span class="lbl">Pool members</span>
+      <div class="ctl oneline">
+        <span class="clip"><span class="chip">NOT REPORTED <span class="x">×</span></span><span class="chip">M <span class="x">×</span></span></span>
+      </div></div>
+    <div class="field inlab"><span class="lbl">Pool name</span>
+      <div class="ctl oneline"><input class="txt" value="Pool"></div></div>
+  </div>
+  <div class="verdict">Verdict: real height win, but a new label idiom this design system does not have yet — a bigger decision than B.</div>
+</div>
+
+<!-- ================= E ================= -->
+<h2>E — row layout past a threshold</h2>
+<p class="why">When a script declares more than ~6 controls, a grid stops scanning well whatever the density. Switch to label-left rows at 36px: reads like a settings form, every value stays fully visible, and vertical growth is honest — one row per control.</p>
+<div class="card" style="max-width: 560px;">
+  <div class="grid rows">
+    <div class="field"><span class="lbl">Numeric Stats</span>
+      <div class="ctl oneline">
+        <span class="chip">n <span class="x">×</span></span>
+        <span class="chip">Mean (SD) <span class="x">×</span></span>
+        </span>
+        <span class="more">+3</span>
+      </div></div>
+    <div class="field"><span class="lbl">Vars</span>
+      <div class="ctl oneline">
+        <span class="clip"><span class="chip">AGE <span class="x">×</span></span>
+        <span class="chip">DSDIAG <span class="x">×</span></span>
+        <span class="chip">ETHNIC <span class="x">×</span></span>
+        </span>
+        <span class="more">+4</span>
+      </div></div>
+    <div class="field"><span class="lbl">Pool members</span>
+      <div class="ctl oneline">
+        <span class="chip">NOT REPORTED <span class="x">×</span></span>
+        <span class="chip">M <span class="x">×</span></span>
+      </div></div>
+    <div class="field"><span class="lbl">Pool name</span>
+      <div class="ctl oneline"><input class="txt" value="Pool"></div></div>
+  </div>
+  <div class="verdict">Verdict: the right shape for a sidebar-ish narrow panel or a control-heavy block; wrong for a wide card with 3 knobs.</div>
+</div>
+
+</body>
+</html>

@@ -477,7 +477,7 @@ cb_params_ui <- function(specs, ns, values = list()) {
   }
   shiny::div(
     class = "fb-params-grid",
-    style = sprintf("--fb-cols:%d;", min(length(fields), 3L)),
+    style = fb_grid_cols(length(fields)),
     fields
   )
 }

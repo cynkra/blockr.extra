@@ -171,10 +171,21 @@
 .function-block-params { margin-bottom: 8px; }
 
 /* Params grid. Column count is driven by `--fb-cols` (set from R to the field
- * count, capped at 3) so N fields never leave an empty trailing column — 2
+ * count, capped at 4) so N fields never leave an empty trailing column — 2
  * fields fill the row 50/50. Fixed tracks (not auto-fit) mean an odd leftover
- * keeps its column share instead of stretching to full width. Container
- * queries only ever step the count *down* on narrower panels. */
+ * keeps its column share instead of stretching to full width.
+ *
+ * Each container band carries its OWN clamped count rather than a literal, for
+ * the same reason: a literal `repeat(3, …)` in the mid band would widen a
+ * two-field grid into three tracks and leave one empty, which is precisely
+ * what the count is capped to avoid. R sets all three, so every band is
+ * `min(fields, band cap)` and the ladder only ever steps down.
+ *
+ * The bands are set by a floor on the TRACK, not on the panel: a column stops
+ * being useful below ~150px, so each band ends where its own tracks would
+ * cross that. With a 12px gap that is 636 / 474 / 312, rounded. Four columns
+ * therefore survive well into a half-width dock panel, which is where a
+ * control-heavy script actually sits. */
 .fb-params-grid {
   display: grid;
   gap: 12px 12px;
@@ -183,10 +194,17 @@
 .fb-params-grid > .block-input-wrapper:only-child {
   grid-column: 1 / -1;
 }
-@container (max-width: 620px) {
-  .fb-params-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container (max-width: 640px) {
+  .fb-params-grid {
+    grid-template-columns: repeat(var(--fb-cols-md, 3), minmax(0, 1fr));
+  }
 }
-@container (max-width: 360px) {
+@container (max-width: 480px) {
+  .fb-params-grid {
+    grid-template-columns: repeat(var(--fb-cols-sm, 2), minmax(0, 1fr));
+  }
+}
+@container (max-width: 320px) {
   .fb-params-grid { grid-template-columns: 1fr; }
 }
 

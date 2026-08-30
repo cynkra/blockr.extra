@@ -355,13 +355,9 @@ output$dynamic_params <- shiny::renderUI({
     )
   })
 
-  # Column count = number of fields, capped at 3, so 2 fields fill the row
-  # (50/50) rather than leaving an empty trailing column. Container queries
-  # only ever step this *down* on narrow panels.
-  n_cols <- min(length(ui_elements), 3L)
   shiny::div(
     class = "fb-params-grid",
-    style = sprintf("--fb-cols:%d;", n_cols),
+    style = fb_grid_cols(length(ui_elements)),
     ui_elements
   )
 })
@@ -407,4 +403,21 @@ list(
   r_version = r_version,
   get_param_values = get_param_values
 )
+}
+
+
+#' The params grid's column count, per container band
+#'
+#' One variable per breakpoint instead of a literal in the CSS, so every band
+#' is `min(fields, cap)`: a two-field grid stays two columns in the four-column
+#' band rather than being widened into a row with an empty trailing track.
+#' Caps are 4 / 3 / 2, and the narrowest band is a single stacked column.
+#'
+#' @param n Number of fields in the grid.
+#' @noRd
+fb_grid_cols <- function(n) {
+  sprintf(
+    "--fb-cols:%d; --fb-cols-md:%d; --fb-cols-sm:%d;",
+    min(n, 4L), min(n, 3L), min(n, 2L)
+  )
 }

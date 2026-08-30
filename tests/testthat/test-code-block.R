@@ -600,3 +600,14 @@ test_that("an empty factor declares a multi-select with nothing picked", {
   expect_true(s$multiple)
   expect_identical(s$choices, c("a", "b", "c"))
 })
+
+
+# ---- params grid ----------------------------------------------------------
+
+test_that("the params grid clamps its column count in every container band", {
+  # A band carries min(fields, cap) rather than a literal, so a two-field grid
+  # is never widened into a row with an empty trailing track.
+  expect_identical(fb_grid_cols(2), "--fb-cols:2; --fb-cols-md:2; --fb-cols-sm:2;")
+  expect_identical(fb_grid_cols(3), "--fb-cols:3; --fb-cols-md:3; --fb-cols-sm:2;")
+  expect_identical(fb_grid_cols(7), "--fb-cols:4; --fb-cols-md:3; --fb-cols-sm:2;")
+})
