@@ -524,3 +524,69 @@ test_that("a helper a declaration actually reads is forced, once", {
   # Read by two declarations, evaluated once: the active binding caches.
   expect_identical(getOption("cb_helper"), 1L)
 })
+
+
+# ---- scoping --------------------------------------------------------------
+
+test_that("a formal shadows a control of the same name inside the function", {
+  # `function(n)` binds `n` for its body, so the body's `n` is the argument,
+  # not the knob. Substituting it would rewrite the lambda.
+  e <- expr_for("n <- 3\nsapply(1:2, function(n) n + 1)")
+  expect_identical(e, quote(sapply(1:2, function(n) n + 1)))
+
+  # ... including through the backslash lambda, and in a default.
+  expect_identical(
+    expr_for("n <- 3\nsapply(1:2, \\(n) n + 1)"),
+    quote(sapply(1:2, function(n) n + 1))
+  )
+  expect_identical(
+    expr_for("n <- 3\nsapply(1:2, function(x, k = n) x + k)"),
+    quote(sapply(1:2, function(x, k = 3) x + k))
+  )
+
+  # A formal that does NOT clash leaves the substitution alone.
+  expect_identical(
+    expr_for("n <- 3\nsapply(1:2, \\(x) x + n)"),
+    quote(sapply(1:2, function(x) x + 3))
+  )
+})
+
+test_that("a formal named data shadows the block's data slot", {
+  # The bug this guards: every group returning nrow() of the whole table.
+  e <- expr_for("vapply(split(data, data$cyl), function(data) nrow(data), 1L)")
+  expect_identical(
+    e,
+    quote(vapply(split(.(data), .(data)$cyl), function(data) nrow(data), 1L))
+  )
+})
+
+test_that("a loop variable demotes the declaration it collides with", {
+  # Plain R leaves `n` at 2 after the loop, so the script cannot mean a knob.
+  p <- cb_parse("n <- 3\nfor (n in 1:2) print(n)\nhead(data, n)")
+  expect_identical(cb_shadowed(p), "n")
+
+  e <- expr_for("n <- 3\nfor (n in 1:2) print(n)\nhead(data, n)")
+  expect_identical(e[[2L]], quote(n <- 3))
+  expect_identical(e[[3L]], quote(for (n in 1:2) print(n)))
+
+  expect_match(
+    cb_rest_label(specs_for("n <- 3\nfor (n in 1:2) print(n)\nhead(data, n)"), p),
+    "n assigned in the body"
+  )
+})
+
+
+# ---- construction ---------------------------------------------------------
+
+test_that("the constructor rejects a script that cannot be used", {
+  expect_error(new_code_block(script = "head(data,"), "Failed to parse script")
+  expect_error(new_code_block(script = "n <- 6"), "no body")
+  expect_s3_class(new_code_block(), "code_block")
+})
+
+test_that("the footer reports a parse failure of an external write", {
+  expect_match(
+    cb_rest_label(list(), cb_parse("head(data,")),
+    "does not parse"
+  )
+})

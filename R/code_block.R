@@ -56,6 +56,18 @@ new_code_block <- function(script = "n <- 6\n\nutils::head(data, n)",
   stopifnot(is.character(script), length(script) == 1L)
   stopifnot(is.list(values))
 
+  # Fail at board build, not at first paint. A script that does not parse, or
+  # that is all declarations and no result, otherwise gives a blank card whose
+  # reason is only visible once the editor is opened.
+  ctor_parsed <- cb_parse(script)
+  if (!ctor_parsed$ok) {
+    stop("Failed to parse script: ", ctor_parsed$error, call. = FALSE)
+  }
+  if (!length(Filter(function(st) !st$input, ctor_parsed$stmts))) {
+    stop("`script` must end with a statement returning the result; ",
+         "declarations alone have no body.", call. = FALSE)
+  }
+
   blockr.core::new_block(
     server = function(id, data) {
       shiny::moduleServer(
@@ -240,6 +252,11 @@ new_code_block <- function(script = "n <- 6\n\nutils::head(data, n)",
 #'
 #' @noRd
 cb_rest_label <- function(specs, parsed) {
+  # The externally controllable `script` can be written past the constructor
+  # (assistant, MCP, a restored board), so the parse verdict belongs here too.
+  if (!parsed$ok) {
+    return(paste0("does not parse: ", parsed$error))
+  }
   bad <- Filter(function(s) !is.null(s$error), specs)
   if (length(bad)) {
     return(paste0(bad[[1L]]$name, ": ", bad[[1L]]$error))

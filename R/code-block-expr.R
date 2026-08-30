@@ -61,6 +61,11 @@ cb_literal <- function(v) {
 #' not a variable reference, and substituting them is how naive source rewriting
 #' produces broken code.
 #'
+#' Scope is respected too. A `function()` formal rebinds the name for that
+#' body, so the substitution stops at the boundary; a `for` variable rebinds it
+#' in the same environment, so the declaration is demoted to code instead (see
+#' [cb_shadowed()]).
+#'
 #' @param e An expression.
 #' @param subs A named list of replacement nodes.
 #' @noRd
@@ -73,6 +78,27 @@ cb_subst <- function(e, subs) {
     return(e)
   }
   if (!is.call(e)) {
+    return(e)
+  }
+  # `function(x) ...` opens a scope: a formal binds the name for the body, so
+  # the control of the same name is not what that body means. Substituting it
+  # would rewrite `function(data) nrow(data)` into a reference to the upstream
+  # block and quietly return the wrong number. A formal shadows for the
+  # defaults too, which R evaluates in the function's own frame.
+  if (identical(e[[1L]], quote(`function`)) && length(e) >= 3L) {
+    inner <- subs[setdiff(names(subs), names(e[[2L]]))]
+    fmls <- e[[2L]]
+    for (i in seq_along(fmls)) {
+      if (!cb_is_empty_sym(fmls[[i]])) {
+        fmls[[i]] <- cb_subst(fmls[[i]], inner)
+      }
+    }
+    e[[2L]] <- fmls
+    e[[3L]] <- cb_subst(e[[3L]], inner)
+    # The srcref would otherwise deparse the pre-substitution source.
+    if (length(e) >= 4L) {
+      e[[4L]] <- NULL
+    }
     return(e)
   }
   # `x$name` / `x@name`: the right side is a literal name, not a variable.
@@ -186,6 +212,14 @@ cb_assigned_names <- function(exprs) {
     if (length(e) == 3L && is.name(e[[2L]]) &&
         (identical(e[[1L]], quote(`<-`)) || identical(e[[1L]], quote(`=`)) ||
            identical(e[[1L]], quote(`<<-`)))) {
+      found <<- c(found, as.character(e[[2L]]))
+    }
+    # A loop variable is an assignment in the same environment: after
+    # `for (n in 1:2)` plain R leaves `n` at 2, whatever it was before. So a
+    # declaration the body loops over is demoted to code like any other
+    # re-assignment, rather than being substituted into the loop head.
+    if (identical(e[[1L]], quote(`for`)) && length(e) == 4L &&
+          is.name(e[[2L]])) {
       found <<- c(found, as.character(e[[2L]]))
     }
     if (length(e) > 1L) {
