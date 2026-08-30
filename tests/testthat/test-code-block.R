@@ -590,3 +590,13 @@ test_that("the footer reports a parse failure of an external write", {
     "does not parse"
   )
 })
+
+test_that("an empty factor declares a multi-select with nothing picked", {
+  # "Pick any number of these, starting from none" has no other spelling: the
+  # declaration's length is the only signal, so zero cannot mean single.
+  s <- specs_for('x <- factor(character(0), c("a", "b", "c"))')[[1L]]
+
+  expect_identical(s$kind, "select")
+  expect_true(s$multiple)
+  expect_identical(s$choices, c("a", "b", "c"))
+})

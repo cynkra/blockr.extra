@@ -199,6 +199,14 @@ cb_annotation <- function(line_text) {
 #' whose user narrows it to one pick must stay a multi-select, so `multiple` is
 #' fixed by the script.
 #'
+#' Exactly one pick declares a single select; anything else declares a
+#' multi-select. **Zero is deliberately on the multi side**, so a script can
+#' offer a set of choices with nothing chosen yet
+#' (`factor(character(0), levels = lv)`). Reading it as a single select instead
+#' would leave no way to write "pick any number of these, starting from none" —
+#' the declaration's length is the only signal available, and a one-element
+#' default is not always wanted.
+#'
 #' @param v The evaluated right-hand side.
 #' @return A list with `kind`, and for selects `choices` and `multiple`; `NULL`
 #'   when the value maps to no widget.
@@ -206,7 +214,7 @@ cb_annotation <- function(line_text) {
 cb_widget_for <- function(v) {
   if (is.factor(v)) {
     return(list(kind = "select", choices = levels(v),
-                multiple = length(v) > 1L))
+                multiple = length(v) != 1L))
   }
   if (inherits(v, "Date")) {
     return(list(kind = "date"))
