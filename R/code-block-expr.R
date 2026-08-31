@@ -108,12 +108,23 @@ cb_subst <- function(e, subs) {
     return(e)
   }
   # Index 1 is the call head, which is never an input.
+  # A substitution that comes back NULL must NOT be assigned into the call:
+  # `e[[i]] <- NULL` DELETES the element and shortens `e`, while the loop
+  # bounds were fixed before it started. A NULL argument in last position then
+  # vanishes from the emitted code, and one anywhere else walks the loop off
+  # the end ("subscript out of bounds"), killing the block. Intentional
+  # removal has its own sentinel (CB_DROP), so NULL here only ever means "this
+  # argument is NULL", which is already what the call says.
   if (length(e) > 1L) {
     for (i in 2L:length(e)) {
       if (cb_is_empty_sym(e[[i]])) {
         next
       }
-      e[[i]] <- cb_subst(e[[i]], subs)
+      sub <- cb_subst(e[[i]], subs)
+      if (is.null(sub)) {
+        next
+      }
+      e[[i]] <- sub
     }
   }
   e
@@ -133,12 +144,17 @@ cb_fold <- function(e) {
   if (!is.call(e)) {
     return(e)
   }
+  # Same trap as cb_subst(): assigning NULL into a call deletes the element.
   if (length(e) > 1L) {
     for (i in 2L:length(e)) {
       if (cb_is_empty_sym(e[[i]])) {
         next
       }
-      e[[i]] <- cb_fold(e[[i]])
+      folded <- cb_fold(e[[i]])
+      if (is.null(folded)) {
+        next
+      }
+      e[[i]] <- folded
     }
   }
 
