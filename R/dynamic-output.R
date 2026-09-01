@@ -163,6 +163,25 @@ gt_house_style <- function(x) {
 }
 
 render_dynamic_output <- function(result, block, session) {
+  # A NULL RESULT PAINTS NOTHING. Everything below ends at `print()` as
+  # preformatted text for an object no branch claims, and printing NULL puts
+  # the word NULL on the card.
+  #
+  # It is not a result the user wrote. blockr.core hands one down whenever the
+  # block is momentarily outside the eval set -- `res()` returns NULL early
+  # while `block_ready()`, which gates the render observer, does not test
+  # `needed()` (blockr.core R/block-server.R). A view switch lands a block's
+  # visibility across several flushes, so a block already on screen takes that
+  # round trip and its output is rendered from the NULL. On a slow connection
+  # the two paints arrive as two messages and the table is preceded by the
+  # word NULL for a fraction of a second.
+  #
+  # A block that genuinely returns NULL paints nothing too, which is the same
+  # thing the table block does with it (an empty frame, drawn empty).
+  if (is.null(result)) {
+    return(shiny::renderUI(NULL))
+  }
+
   # A GTSUMMARY TABLE IS A DESCRIPTION OF A TABLE, NOT A RENDERED ONE. Its
   # HTML comes from gt, reached through `gtsummary::as_gt()`, so it has no
   # `as.tags` method of its own and would otherwise fall through to
