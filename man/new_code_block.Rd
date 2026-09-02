@@ -11,7 +11,9 @@ new_code_block(
 )
 }
 \arguments{
-\item{script}{Character string of R code. \code{data} is the incoming data frame.}
+\item{script}{R code, either a single string with embedded newlines or a
+character vector of lines, which is joined with \verb{\\n}. \code{data} is the
+incoming data frame.}
 
 \item{values}{Named list of current control values, restored with a saved
 board. Values for names the script no longer declares are dropped.}
@@ -76,9 +78,23 @@ no \code{local({...})} wrapper and no \verb{.fn <- function(data, ...)} sandwich
 \link{code-block-expr}.
 }
 
+\section{Saved as lines}{
+
+A saved board writes the script as a JSON array, one element per line, so
+that editing a script shows up in a git diff as the lines that changed
+rather than as one long replaced string. Both forms are accepted on the way
+back in: a one-element string with embedded newlines (every board saved
+before this) and a character vector of lines, which is joined with \verb{\\n}.
+}
+
 \examples{
 blk <- new_code_block(
   script = "n <- 6\n\nutils::head(data, n)"
+)
+
+# the same script, one element per line
+blk <- new_code_block(
+  script = c("n <- 6", "", "utils::head(data, n)")
 )
 
 }

@@ -772,3 +772,75 @@ test_that("the params grid clamps its column count in every container band", {
   expect_identical(fb_grid_cols(3), "--fb-cols:3; --fb-cols-md:3; --fb-cols-sm:2;")
   expect_identical(fb_grid_cols(7), "--fb-cols:4; --fb-cols-md:3; --fb-cols-sm:2;")
 })
+
+
+# ---- script as lines ------------------------------------------------------
+
+test_that("lines and text are the same script, both ways round", {
+  expect_identical(cb_script_text(c("a", "b")), "a\nb")
+  expect_identical(cb_script_text("a\nb"), "a\nb")
+  expect_identical(cb_script_lines("a\nb"), c("a", "b"))
+
+  # A trailing newline survives, which a bare strsplit() would eat.
+  for (script in c("", "a", "a\nb", "a\nb\n", "a\n\nb", "\n", "a\n\n")) {
+    expect_identical(cb_script_text(cb_script_lines(script)), script)
+  }
+})
+
+test_that("the constructor takes a script written as lines", {
+  lines <- c("n <- 3", "", "utils::head(data, n)")
+  block <- new_code_block(script = lines)
+  expect_s3_class(block, "code_block")
+  expect_identical(blockr_ser(block)$payload$script, lines)
+
+  # And still takes the one string every saved board holds today.
+  expect_identical(
+    blockr_ser(new_code_block(script = paste(lines, collapse = "\n")))$payload,
+    blockr_ser(block)$payload
+  )
+})
+
+test_that("a saved board writes the script as lines", {
+  block <- new_code_block(script = "n <- 6\n\nutils::head(data, n)")
+  ser <- blockr_ser(block)
+  expect_identical(ser$payload$script, c("n <- 6", "", "utils::head(data, n)"))
+
+  # A one-line script has nothing to split, so it stays a plain JSON string.
+  one <- blockr_ser(new_code_block(script = "utils::head(data, 2)"))
+  expect_identical(one$payload$script, "utils::head(data, 2)")
+})
+
+test_that("both serialized forms deserialize to the same block", {
+  script <- "n <- 6\n\nutils::head(data, n)"
+  ser <- blockr_ser(new_code_block(script = script, values = list(n = 4)))
+
+  # What boards saved before the change hold.
+  legacy <- ser
+  legacy$payload$script <- script
+
+  expect_identical(blockr_ser(blockr.core::blockr_deser(legacy)), ser)
+  expect_identical(blockr_ser(blockr.core::blockr_deser(ser)), ser)
+})
+
+test_that("an external write of lines is collapsed into the script", {
+  block <- new_code_block(script = "n <- 3\n\nutils::head(data, n)")
+  testServer(
+    blockr.core::get_s3_method("block_server", block),
+    {
+      session$flushReact()
+
+      session$returned$state$script(c("n <- 5", "", "utils::head(data, n)"))
+      session$flushReact()
+
+      expect_identical(
+        session$returned$state$script(),
+        "n <- 5\n\nutils::head(data, n)"
+      )
+      expect_equal(
+        session$returned$expr(),
+        bquote(utils::head(.(data_slot()), 5))
+      )
+    },
+    args = list(x = block, data = list(data = function() datasets::iris))
+  )
+})

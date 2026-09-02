@@ -52,7 +52,16 @@
 #' no `local({...})` wrapper and no `.fn <- function(data, ...)` sandwich. See
 #' [code-block-expr].
 #'
-#' @param script Character string of R code. `data` is the incoming data frame.
+#' @section Saved as lines:
+#' A saved board writes the script as a JSON array, one element per line, so
+#' that editing a script shows up in a git diff as the lines that changed
+#' rather than as one long replaced string. Both forms are accepted on the way
+#' back in: a one-element string with embedded newlines (every board saved
+#' before this) and a character vector of lines, which is joined with `\n`.
+#'
+#' @param script R code, either a single string with embedded newlines or a
+#'   character vector of lines, which is joined with `\n`. `data` is the
+#'   incoming data frame.
 #' @param values Named list of current control values, restored with a saved
 #'   board. Values for names the script no longer declares are dropped.
 #' @param ... Additional arguments passed to [blockr.core::new_block()]
@@ -62,13 +71,20 @@
 #'   script = "n <- 6\n\nutils::head(data, n)"
 #' )
 #'
+#' # the same script, one element per line
+#' blk <- new_code_block(
+#'   script = c("n <- 6", "", "utils::head(data, n)")
+#' )
+#'
 #' @export
 new_code_block <- function(script = "n <- 6\n\nutils::head(data, n)",
                            values = list(),
                            ...) {
   force(script)
   force(values)
-  stopifnot(is.character(script), length(script) == 1L)
+  stopifnot(is.character(script))
+  script <- cb_script_text(script)
+  stopifnot(length(script) == 1L)
   stopifnot(is.list(values))
 
   # Fail at board build, not at first paint. A script that does not parse, or
@@ -92,6 +108,16 @@ new_code_block <- function(script = "n <- 6\n\nutils::head(data, n)",
 
           r_script <- as_rv(script, script)
           r_values <- shiny::reactiveVal(values)
+
+          # `script` is externally controllable, so a write can arrive from the
+          # assistant, MCP or a restore as a vector of lines rather than as one
+          # string. Collapse it here, at the one place every write passes
+          # through, so everything downstream keeps reading a single string.
+          shiny::observeEvent(r_script(), {
+            if (length(r_script()) != 1L) {
+              r_script(cb_script_text(r_script()))
+            }
+          }, priority = 10L)
 
           # Parse is cheap and pure; everything downstream derives from it.
           r_parsed <- shiny::reactive(cb_parse(r_script()))
@@ -320,6 +346,62 @@ cb_rest_label <- function(specs, parsed) {
   )
 }
 
+
+#' One string to work in, one line per element to diff
+#'
+#' The block works with a single string: that is what the editor holds and what
+#' `parse()` takes. A saved board is read by people and by git, and there a
+#' script is lines -- written as one string it is a single JSON value, so
+#' changing one line of a fifty-line script shows up as one replaced blob.
+#'
+#' `cb_script_text()` joins lines into the working form, `cb_script_lines()`
+#' cuts the working form back into lines. They round-trip exactly, trailing
+#' newline included, which is why the split is not a bare `strsplit()`: that
+#' drops the empty string after a final newline.
+#'
+#' @noRd
+cb_script_text <- function(x) {
+
+  if (length(x) == 1L) {
+    return(x)
+  }
+
+  paste(x, collapse = "\n")
+}
+
+#' @noRd
+cb_script_lines <- function(x) {
+
+  x <- cb_script_text(x)
+
+  if (!nzchar(x)) {
+    return(x)
+  }
+
+  out <- strsplit(x, "\n", fixed = TRUE)[[1L]]
+
+  if (endsWith(x, "\n")) {
+    return(c(out, ""))
+  }
+
+  out
+}
+
+# Write the script to a saved board as lines. The only thing this changes about
+# a saved board is the shape of the one value:
+# `"script": ["n <- 6", "", "utils::head(data, n)"]` instead of a string with
+# `\n` in it. The constructor takes both, so a board saved before this loads
+# unchanged, and one saved after it diffs line by line.
+#' @importFrom blockr.core blockr_ser
+#' @export
+blockr_ser.code_block <- function(x, state = NULL, ...) {
+
+  res <- NextMethod()
+
+  res[["payload"]][["script"]] <- cb_script_lines(res[["payload"]][["script"]])
+
+  res
+}
 
 #' @export
 block_eval.code_block <- function(x, expr, env, ...) {
