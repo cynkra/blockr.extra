@@ -318,12 +318,21 @@ cb_rest_label <- function(specs, parsed) {
       paste(unique(name[hit]), collapse = ", ")
     ))
   }
+  # The header rule's one failure mode: a control that does not appear because
+  # the line sits below the first real statement. Say where.
+  late <- Filter(function(st) isTRUE(st$late), parsed$stmts)
+  if (length(late)) {
+    return(sprintf(
+      "line %s is below the first statement, so it stays code",
+      late[[1L]]$line
+    ))
+  }
   n <- length(specs)
   if (!n) {
-    return("no inputs · assign a value or a choice pool to get a control")
+    return("no inputs · assign a value at the top of the script to get a control")
   }
   sprintf(
-    "%d input%s · lines assigning a value or a choice pool become controls",
+    "%d input%s · assignments at the top become controls, .name stays private",
     n, if (n == 1L) "" else "s"
   )
 }

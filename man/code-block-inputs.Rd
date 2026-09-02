@@ -4,18 +4,20 @@
 \alias{code-block-inputs}
 \title{The inputs layer of the code block}
 \description{
-The code block's script is ordinary R. A top-level assignment whose
-right-hand side is a \emph{plain value} (\link{CB_VALUE_CALLS}) or a \emph{choice pool}
-(\link{CB_POOL_CALLS}) becomes a control on the card; every other statement is
-code. Which widget a line would be is decidable by reading it, without
-evaluating anything. Whether it is a control at all also depends on the rest
-of the script (see \code{cb_demoted()}), which is likewise syntactic.
+The code block's script is ordinary R. In the \emph{header} -- the run of
+assignments the script opens with -- an assignment whose right-hand side is
+a \emph{plain value} (\link{CB_VALUE_CALLS}) or a \emph{choice pool} (\link{CB_POOL_CALLS})
+becomes a control on the card; every other statement is code. A name
+starting with a dot is never a control, which is the escape hatch for a
+header line that is scaffolding rather than a knob.
 }
 \details{
-There is deliberately no fenced region and no marker comment: an input is a
-\emph{kind of line}, not a \emph{place in the script}, so nothing has to be delimited
-and nothing can be mis-delimited. The editor paints the lines that became
-controls (see \code{blockr-code-inputs} in \code{srcjs/code-block/index.js}), which is
-what tells the user which lines are special.
+All of it is decidable by reading the script, without evaluating anything.
+
+There is deliberately no fenced region and no marker comment. The header is
+where the declarations stop, so nothing has to be delimited and nothing can
+be mis-delimited. The editor paints the lines that became controls (see
+\code{blockr-code-inputs} in \code{srcjs/code-block/index.js}), which is what tells
+the user which lines are special.
 }
 \keyword{internal}

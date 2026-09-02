@@ -1,17 +1,19 @@
 #' The inputs layer of the code block
 #'
-#' The code block's script is ordinary R. A top-level assignment whose
-#' right-hand side is a *plain value* ([CB_VALUE_CALLS]) or a *choice pool*
-#' ([CB_POOL_CALLS]) becomes a control on the card; every other statement is
-#' code. Which widget a line would be is decidable by reading it, without
-#' evaluating anything. Whether it is a control at all also depends on the rest
-#' of the script (see `cb_demoted()`), which is likewise syntactic.
+#' The code block's script is ordinary R. In the *header* -- the run of
+#' assignments the script opens with -- an assignment whose right-hand side is
+#' a *plain value* ([CB_VALUE_CALLS]) or a *choice pool* ([CB_POOL_CALLS])
+#' becomes a control on the card; every other statement is code. A name
+#' starting with a dot is never a control, which is the escape hatch for a
+#' header line that is scaffolding rather than a knob.
 #'
-#' There is deliberately no fenced region and no marker comment: an input is a
-#' *kind of line*, not a *place in the script*, so nothing has to be delimited
-#' and nothing can be mis-delimited. The editor paints the lines that became
-#' controls (see `blockr-code-inputs` in `srcjs/code-block/index.js`), which is
-#' what tells the user which lines are special.
+#' All of it is decidable by reading the script, without evaluating anything.
+#'
+#' There is deliberately no fenced region and no marker comment. The header is
+#' where the declarations stop, so nothing has to be delimited and nothing can
+#' be mis-delimited. The editor paints the lines that became controls (see
+#' `blockr-code-inputs` in `srcjs/code-block/index.js`), which is what tells
+#' the user which lines are special.
 #'
 #' @name code-block-inputs
 #' @keywords internal
@@ -66,12 +68,14 @@ CB_GLYPHS <- c(select = "\u25be", number = "#", text = "Aa", flag = "\u2713",
                date = "\u25a4")
 
 
-#' Is this statement an input declaration?
+#' Is this statement an assignment to a bare name?
+#'
+#' The shape that can open a declaration, whether or not it turns out to be
+#' one. The run of these at the top of the script is the header.
 #'
 #' @param e A top-level expression from [parse()].
-#' @return `TRUE` for `name <- <plain value>`.
 #' @noRd
-cb_is_input_stmt <- function(e) {
+cb_is_assign_stmt <- function(e) {
   if (!is.call(e) || length(e) != 3L) {
     return(FALSE)
   }
@@ -79,7 +83,34 @@ cb_is_input_stmt <- function(e) {
   if (!identical(op, quote(`<-`)) && !identical(op, quote(`=`))) {
     return(FALSE)
   }
-  if (!is.name(e[[2L]])) {
+  is.name(e[[2L]])
+}
+
+
+#' Is this a name the block keeps to itself?
+#'
+#' The escape hatch, and it is the one R already has: a leading dot means
+#' internal. `ls()` hides those names, so does a file manager, and so does
+#' this. It is how a header line that computes something from the data says it
+#' is scaffolding for the knobs below it rather than a knob.
+#'
+#' @param name A variable name.
+#' @noRd
+cb_is_private_name <- function(name) {
+  !is.na(name) && startsWith(name, ".")
+}
+
+
+#' Is this statement an input declaration?
+#'
+#' @param e A top-level expression from [parse()].
+#' @return `TRUE` for `name <- <plain value>`, the name not starting with a dot.
+#' @noRd
+cb_is_input_stmt <- function(e) {
+  if (!cb_is_assign_stmt(e)) {
+    return(FALSE)
+  }
+  if (cb_is_private_name(as.character(e[[2L]]))) {
     return(FALSE)
   }
   cb_is_value_rhs(e[[3L]])
@@ -164,10 +195,16 @@ cb_call_name <- function(head) {
 
 #' Split a script into input declarations and body statements
 #'
+#' Declarations are the *header*: the run of assignments the script opens with.
+#' The first statement that is not an assignment ends it, and everything from
+#' there down is code however it is written. Knobs belong at the top of a
+#' script anyway, and bounding them that way is what lets a helper line keep
+#' its ordinary meaning further down.
+#'
 #' @param text The script.
 #' @return A list with `ok`, `error` (parse message or `NULL`), `stmts` (one
-#'   record per top-level statement: `expr`, `line`, `input`, `name`) and
-#'   `lines` (the raw source lines, for annotation lookup).
+#'   record per top-level statement: `expr`, `line`, `input`, `name`, `late`)
+#'   and `lines` (the raw source lines, for annotation lookup).
 #' @noRd
 cb_parse <- function(text) {
   if (is.null(text) || !nzchar(trimws(text))) {
@@ -183,14 +220,31 @@ cb_parse <- function(text) {
   }
 
   refs <- utils::getSrcref(exprs)
+  # The header is the run of declarations and dotted helpers the script opens
+  # with. The first line that is neither -- a real computation, or anything
+  # that is not an assignment at all -- ends it, and from there down every
+  # statement is code.
+  opens_header <- vapply(seq_along(exprs), function(i) {
+    e <- exprs[[i]]
+    if (cb_is_input_stmt(e)) {
+      return(TRUE)
+    }
+    cb_is_assign_stmt(e) && cb_is_private_name(as.character(e[[2L]]))
+  }, logical(1L))
+  in_header <- cumprod(as.integer(opens_header)) > 0L
   stmts <- lapply(seq_along(exprs), function(i) {
     e <- exprs[[i]]
-    is_input <- cb_is_input_stmt(e)
+    declares <- cb_is_input_stmt(e)
+    is_input <- declares && in_header[[i]]
     list(
       expr = e,
       line = if (is.null(refs) || is.null(refs[[i]])) NA_integer_ else
         as.integer(refs[[i]])[1L],
       input = is_input,
+      # A line that would have been a control had it been in the header. The
+      # footer says so, because a knob that silently does not appear is the
+      # one failure this rule can produce.
+      late = declares && !in_header[[i]],
       name = if (is_input) as.character(e[[2L]]) else NA_character_
     )
   })

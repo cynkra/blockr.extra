@@ -99,9 +99,9 @@ test_that("a bare vector is the value, so the pool is that vector", {
 test_that("a declaration can read a helper line above it, lazily", {
   # The pipeline in between must NOT be evaluated to get there.
   script <- paste(
-    'lv <- unique(data$Species)',
-    'boom <- stop("should never run")',
-    'x <- factor("setosa", lv)',
+    '.lv <- unique(data$Species)',
+    '.boom <- stop("should never run")',
+    'x <- factor("setosa", .lv)',
     sep = "\n"
   )
   s <- specs_for(script)
@@ -244,40 +244,63 @@ test_that("a name the body assigns stays code and offers no control", {
   expect_equal(eval_bquoted(e, iris), utils::head(iris, nrow(iris)))
 })
 
-test_that("a re-assigned declaration gets neither a control nor a band", {
+test_that("a dotted name is scaffolding, whatever it holds", {
   script <- paste(
-    'keep <- c("Sepal.Length", "Petal.Length", "Missing")',
-    'keep <- intersect(keep, names(data))',
+    '.keep <- c("Sepal.Length", "Nope")',
+    '.keep <- intersect(.keep, names(data))',
     '',
-    'col <- factor(keep, levels = keep)',
+    'col <- factor(.keep, levels = .keep)',
     '',
     'data[, as.character(col), drop = FALSE]',
     sep = "\n"
   )
   p <- cb_parse(script)
-  expect_equal(attr(cb_demoted(p), "reason")[[1L]], "redeclared")
-
   specs <- cb_specs(p, iris)
   expect_equal(vapply(specs, `[[`, character(1L), "name"), "col")
 
-  # The editor paints exactly the lines that became controls, so line 1 has no
-  # band either.
+  # `.keep <- f(.keep)` is ordinary R and reads the OLD `.keep`; without
+  # carrying the previous binding in, the line reads itself and `col` dies of
+  # infinite recursion.
+  expect_null(specs[[1L]]$error)
+  expect_equal(specs[[1L]]$choices, "Sepal.Length")
+
+  # The editor paints exactly the lines that became controls.
   expect_equal(vapply(cb_syntactic_marks(script), `[[`, numeric(1L), "line"), 4)
 })
 
-test_that("`x <- f(x)` reads the previous binding instead of itself", {
-  # The re-assignment is an ordinary lazy helper line; without carrying the old
-  # binding into it, reading `keep` below would recurse into itself.
-  specs <- specs_for(paste(
-    'keep <- c("Sepal.Length", "Nope")',
-    'keep <- intersect(keep, names(data))',
-    'col <- factor(keep, levels = keep)',
-    'data[, as.character(col), drop = FALSE]',
+test_that("a dotted name is never a control, whatever it is assigned", {
+  script <- paste(
+    '.n <- 6',
+    '.pick <- factor("setosa", unique(data$Species))',
+    'label <- "total"',
+    'utils::head(data, .n)',
     sep = "\n"
-  ))
-  expect_length(specs, 1L)
-  expect_null(specs[[1L]]$error)
-  expect_equal(specs[[1L]]$choices, "Sepal.Length")
+  )
+  expect_equal(vapply(specs_for(script), `[[`, character(1L), "name"), "label")
+  expect_equal(vapply(cb_syntactic_marks(script), `[[`, numeric(1L), "line"), 3)
+
+  # Still an ordinary variable: the body reads it and the line survives.
+  e <- expr_for(script)
+  expect_identical(e[[2L]], quote(.n <- 6))
+  expect_equal(eval_bquoted(e, iris), utils::head(iris, 6))
+})
+
+test_that("a declaration below the header stays code, and says so", {
+  script <- paste(
+    'n <- 6',
+    'out <- utils::head(data, n)',
+    'label <- "total"',
+    'out',
+    sep = "\n"
+  )
+  p <- cb_parse(script)
+  expect_equal(vapply(p$stmts, `[[`, logical(1L), "input"), c(TRUE, FALSE, FALSE, FALSE))
+  expect_true(p$stmts[[3L]]$late)
+  expect_equal(vapply(cb_syntactic_marks(script), `[[`, numeric(1L), "line"), 1)
+  expect_match(cb_rest_label(cb_specs(p, iris), p), "line 3")
+
+  # It is still an ordinary assignment, so it has to survive as code.
+  expect_identical(expr_for(script)[[3L]], quote(label <- "total"))
 })
 
 test_that("a pool call declares a multi-select over what the data has", {
@@ -324,10 +347,10 @@ test_that("a pool call that is not a vector is an ordinary line", {
   expect_equal(eval_bquoted(e, iris), nrow(unique(iris)))
 })
 
-test_that("a declaration another declaration reads is a helper, not a knob", {
+test_that("a dotted helper gets no control and no band", {
   script <- paste(
-    'lv <- unique(data$Species)',
-    'pick <- factor("setosa", lv)',
+    '.lv <- unique(data$Species)',
+    'pick <- factor("setosa", .lv)',
     'data[data$Species == pick, ]',
     sep = "\n"
   )
@@ -600,7 +623,7 @@ test_that("building the controls runs the header, never the body", {
 
   script <- paste(
     "sex <- factor('F', levels = sort(unique(data$SEX)))",
-    paste0("unused <- { ", sprintf(bump, "helper", "helper"), "; c('F', 'M') }"),
+    paste0(".unused <- { ", sprintf(bump, "helper", "helper"), "; c('F', 'M') }"),
     paste0("out <- { ", sprintf(bump, "body", "body"), "; 42 }"),
     "out",
     sep = "\n"
@@ -627,9 +650,9 @@ test_that("a helper a declaration actually reads is forced, once", {
   options(cb_helper = 0L)
 
   script <- paste(
-    "lv <- { options(cb_helper = getOption('cb_helper') + 1L); c('a', 'b') }",
-    "pick <- factor('a', levels = lv)",
-    "also <- factor('b', levels = lv)",
+    ".lv <- { options(cb_helper = getOption('cb_helper') + 1L); c('a', 'b') }",
+    "pick <- factor('a', levels = .lv)",
+    "also <- factor('b', levels = .lv)",
     "nrow(data)",
     sep = "\n"
   )

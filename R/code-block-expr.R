@@ -286,18 +286,15 @@ cb_shadowed <- function(parsed) {
 
 #' Which declarations are not controls after all?
 #'
-#' A declaration is a control unless the script itself uses the line as
-#' scaffolding, which shows up in three shapes:
+#' A header declaration is a control unless the script assigns the name again,
+#' which happens two ways: a body statement writes it (the knob's value would
+#' be thrown away), or a second declaration further down replaces it (only the
+#' last one can be the control). Both are decided by reading the script,
+#' without evaluating anything.
 #'
-#' * the name is assigned again by a body statement (the knob's value would be
-#'   thrown away),
-#' * the name is declared a second time further down (only the last declaration
-#'   can be the control),
-#' * another declaration reads the name (`lv <- unique(data$site)` feeding
-#'   `site <- factor("Basel", lv)` is a choice pool for the knob below it, not a
-#'   knob of its own).
-#'
-#' All three are decided by reading the script, without evaluating anything.
+#' A helper line says so for itself by starting its name with a dot, so there
+#' is nothing to work out about `.lv <- unique(data$site)` feeding
+#' `site <- factor("Basel", .lv)`.
 #'
 #' @param parsed The result of [cb_parse()].
 #' @return A logical vector over `parsed$stmts`.
@@ -324,11 +321,7 @@ cb_demoted <- function(parsed) {
     if (any(later & !is.na(nms) & nms == nm)) {
       return("redeclared")
     }
-    others <- which(is_input & seq_len(n) != i)
-    read_below <- any(vapply(others, function(j) {
-      nm %in% all.names(parsed$stmts[[j]]$expr[[3L]])
-    }, logical(1L)))
-    if (read_below) "helper" else ""
+    ""
   }, character(1L))
 
   out <- nzchar(reason)
