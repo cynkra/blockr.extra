@@ -5,10 +5,11 @@
 \title{The inputs layer of the code block}
 \description{
 The code block's script is ordinary R. A top-level assignment whose
-right-hand side is a \emph{plain value} becomes a control on the card; every other
-statement is code. "Plain value" means a literal, or a call to one of a short
-allowlist (\link{CB_VALUE_CALLS}) — decidable by reading the line, without
-evaluating anything.
+right-hand side is a \emph{plain value} (\link{CB_VALUE_CALLS}) or a \emph{choice pool}
+(\link{CB_POOL_CALLS}) becomes a control on the card; every other statement is
+code. Which widget a line would be is decidable by reading it, without
+evaluating anything. Whether it is a control at all also depends on the rest
+of the script (see \code{cb_demoted()}), which is likewise syntactic.
 }
 \details{
 There is deliberately no fenced region and no marker comment: an input is a

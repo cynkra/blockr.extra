@@ -5,29 +5,46 @@
 #' statement returns.
 #'
 #' @section Inputs:
-#' A top-level assignment whose right-hand side is a **plain value** becomes a
-#' control on the card. Everything else is code. "Plain value" means a literal,
-#' or a call to `c()`, `factor()`, `as.Date()` or `as.POSIXct()`.
+#' A top-level assignment whose right-hand side is a **value** or a **choice
+#' pool** becomes a control on the card. Everything else is code.
+#'
+#' A value is a literal, or a call to `c()`, `factor()`, `as.Date()` or
+#' `as.POSIXct()`. A pool is a call to `intersect()`, `setdiff()`, `union()`,
+#' `unique()`, `sort()`, `rev()`, `names()`, `colnames()` or `levels()`, which
+#' is how choices that only the data knows are written down.
 #'
 #' ```r
-#' species <- factor("setosa", unique(data$Species))   # a dropdown
-#' n <- 10                                             # a number box
-#' desc <- TRUE                                        # a checkbox
+#' species <- factor("setosa", unique(data$Species))     # a dropdown
+#' vars <- intersect(names(data), c("AGE", "SEX"))       # a multi-select
+#' n <- 10                                               # a number box
+#' desc <- TRUE                                          # a checkbox
 #'
 #' data |>
 #'   dplyr::filter(Species == species) |>
 #'   dplyr::slice_head(n = n)
 #' ```
 #'
-#' There is no fenced region and no marker comment. An input is a *kind of
-#' line*, not a *place in the script*, so a line is classified on its own and
-#' the editor paints the ones that became controls.
+#' There is no fenced region and no marker comment. The *shape of the line*
+#' says which widget it would be, so a line is read on its own and the editor
+#' paints the ones that became controls.
 #'
-#' A name the script assigns again is not a control: `keep <- c("a", "b")`
-#' followed by `keep <- intersect(keep, names(data))` is a helper line, not a
-#' knob, because the second assignment throws the knob's value away. Both lines
-#' stay code, the editor bands neither, and the footer says which name was
-#' demoted.
+#' A pool is always a multi-select over its own elements, whatever its length,
+#' and a pool call that does not evaluate to a vector is not a control at all —
+#' `dedup <- unique(data)` stays an ordinary line.
+#'
+#' @section Lines that look like controls but are not:
+#' A declaration the script uses as scaffolding gets no control and no band:
+#'
+#' * the name is assigned again by the body (the knob's value would be thrown
+#'   away),
+#' * the name is declared twice (only the last one can be the control),
+#' * another declaration reads the name — `lv <- unique(data$site)` feeding
+#'   `site <- factor("Basel", lv)` is the pool for the knob below it, not a
+#'   knob of its own.
+#'
+#' All three are read off the script. The first two are reported in the editor
+#' footer, because a knob quietly disappearing is worth a word; the third is
+#' the convention working.
 #'
 #' A **factor** is how a select is expressed without any blockr vocabulary: its
 #' levels are the choice list, and the length of its value decides single or
@@ -165,9 +182,23 @@ new_code_block <- function(script = "n <- 6\n\nutils::head(data, n)",
             if (is.null(live)) {
               live <- r_script()
             }
+            # While the text is being edited the marks are a syntactic guess,
+            # because classifying a keystroke must not evaluate anything. Once
+            # the text is the committed script the real specs are available, so
+            # the bands settle onto the lines that actually became controls --
+            # `dedup <- unique(data)` looks like a pool while you type it and
+            # stops looking like one the moment it runs.
+            # Before the first specs land there is nothing better than the
+            # guess, and sending an empty set would blank every band.
+            marks <- if (!is.null(r_specs()) &&
+                           identical(trimws(live), trimws(r_script()))) {
+              cb_editor_marks(r_specs())
+            } else {
+              cb_syntactic_marks(live)
+            }
             session$sendCustomMessage(
               "blockr-code-inputs",
-              list(id = ns("fn_code"), marks = cb_syntactic_marks(live))
+              list(id = ns("fn_code"), marks = marks)
             )
           })
 
@@ -267,20 +298,32 @@ cb_rest_label <- function(specs, parsed) {
   if (length(bad)) {
     return(paste0(bad[[1L]]$name, ": ", bad[[1L]]$error))
   }
-  shadowed <- cb_shadowed(parsed)
-  if (length(shadowed)) {
+  # Only the surprising demotions are worth a line. A helper feeding another
+  # declaration's choices is the convention working, not something to explain.
+  demoted <- cb_demoted(parsed)
+  reason <- attr(demoted, "reason")
+  name <- attr(demoted, "name")
+  hit <- which(reason == "assigned")
+  if (length(hit)) {
     return(sprintf(
       "%s assigned in the body, so %s stays code",
-      paste(shadowed, collapse = ", "),
-      if (length(shadowed) == 1L) "it" else "they"
+      paste(unique(name[hit]), collapse = ", "),
+      if (length(unique(name[hit])) == 1L) "it" else "they"
+    ))
+  }
+  hit <- which(reason == "redeclared")
+  if (length(hit)) {
+    return(sprintf(
+      "%s declared twice, so only the last one is a control",
+      paste(unique(name[hit]), collapse = ", ")
     ))
   }
   n <- length(specs)
   if (!n) {
-    return("no inputs · assign a plain value to get a control")
+    return("no inputs · assign a value or a choice pool to get a control")
   }
   sprintf(
-    "%d input%s · lines assigning a plain value become controls",
+    "%d input%s · lines assigning a value or a choice pool become controls",
     n, if (n == 1L) "" else "s"
   )
 }

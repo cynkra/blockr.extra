@@ -1,10 +1,11 @@
 #' The inputs layer of the code block
 #'
 #' The code block's script is ordinary R. A top-level assignment whose
-#' right-hand side is a *plain value* becomes a control on the card; every other
-#' statement is code. "Plain value" means a literal, or a call to one of a short
-#' allowlist ([CB_VALUE_CALLS]) — decidable by reading the line, without
-#' evaluating anything.
+#' right-hand side is a *plain value* ([CB_VALUE_CALLS]) or a *choice pool*
+#' ([CB_POOL_CALLS]) becomes a control on the card; every other statement is
+#' code. Which widget a line would be is decidable by reading it, without
+#' evaluating anything. Whether it is a control at all also depends on the rest
+#' of the script (see `cb_demoted()`), which is likewise syntactic.
 #'
 #' There is deliberately no fenced region and no marker comment: an input is a
 #' *kind of line*, not a *place in the script*, so nothing has to be delimited
@@ -26,6 +27,24 @@ NULL
 #'
 #' @keywords internal
 CB_VALUE_CALLS <- c("c", "factor", "as.Date", "as.POSIXct")
+
+#' Calls that build a choice pool out of the data
+#'
+#' A pool is what a script reaches for when the choices are not known at
+#' authoring time: `intersect(names(data), c("AGE", "SEX"))` is the list of
+#' columns this data actually has. Writing that as a literal is not possible,
+#' so restricting declarations to literals left the most useful dropdown
+#' unexpressible.
+#'
+#' These are here because each one takes a vector and hands back a vector of
+#' the same kind, so the head of the call already says the result is a pool and
+#' the line stays readable without evaluating it. A call that returns something
+#' else (`unique(data)` is a data frame) is quietly demoted back to code, so an
+#' ordinary pipeline line does not become an error.
+#'
+#' @keywords internal
+CB_POOL_CALLS <- c("intersect", "setdiff", "union", "unique", "sort", "rev",
+                   "names", "colnames", "levels")
 
 #' Annotation keys accepted after `#|`
 #' @noRd
@@ -91,7 +110,42 @@ cb_is_value_rhs <- function(rhs) {
     return(TRUE)
   }
   nm <- cb_call_name(head)
-  !is.null(nm) && nm %in% CB_VALUE_CALLS
+  !is.null(nm) && nm %in% c(CB_VALUE_CALLS, CB_POOL_CALLS)
+}
+
+
+#' Is this right-hand side a choice pool rather than a written-out value?
+#'
+#' A pool declares a multi-select whatever its length, because the *script*
+#' fixes multiplicity and a pool that happens to match one column today is
+#' still a pool. `c()` counts: writing the elements out is how a set is
+#' declared, and a one-element set is not a text box.
+#'
+#' @param rhs The right-hand side expression.
+#' @noRd
+cb_is_pool_rhs <- function(rhs) {
+  if (!is.call(rhs)) {
+    return(FALSE)
+  }
+  nm <- cb_call_name(rhs[[1L]])
+  !is.null(nm) && nm %in% c("c", CB_POOL_CALLS)
+}
+
+
+#' Is this declaration allowed to be demoted when it evaluates to a non-value?
+#'
+#' Only the pool calls. A literal or a `factor()` that yields no widget is a
+#' mistake worth reporting; `unique(data)` is an everyday line that was never
+#' meant to be a control, and marking it with a red `!` would make the rule
+#' feel like a trap.
+#'
+#' @noRd
+cb_is_soft_rhs <- function(rhs) {
+  if (!is.call(rhs)) {
+    return(FALSE)
+  }
+  nm <- cb_call_name(rhs[[1L]])
+  !is.null(nm) && nm %in% CB_POOL_CALLS
 }
 
 
@@ -208,16 +262,23 @@ cb_annotation <- function(line_text) {
 #' default is not always wanted.
 #'
 #' @param v The evaluated right-hand side.
+#' @param pool Was the right-hand side a pool declaration (`c()` or a
+#'   [CB_POOL_CALLS] call)? A pool is always a multi-select over its own
+#'   elements, so a one-column result stays a dropdown instead of turning into
+#'   a text box.
 #' @return A list with `kind`, and for selects `choices` and `multiple`; `NULL`
 #'   when the value maps to no widget.
 #' @noRd
-cb_widget_for <- function(v) {
+cb_widget_for <- function(v, pool = FALSE) {
   if (is.factor(v)) {
     return(list(kind = "select", choices = levels(v),
                 multiple = length(v) != 1L))
   }
   if (inherits(v, "Date")) {
     return(list(kind = "date"))
+  }
+  if (isTRUE(pool) && (is.character(v) || is.numeric(v))) {
+    return(list(kind = "select", choices = as.character(v), multiple = TRUE))
   }
   if (is.logical(v) && length(v) == 1L && !is.na(v)) {
     return(list(kind = "flag"))
@@ -255,14 +316,14 @@ cb_specs <- function(parsed, data = NULL) {
   }
 
   env <- blockr.core::eval_env(list(data = data))
-  # A declaration the script assigns again is not a knob -- the second
-  # assignment throws the knob's value away, so a control for it would be dead.
-  # It is bound like any other helper line and reported in the footer instead.
-  shadowed <- cb_shadowed(parsed)
+  # A declaration the script uses as scaffolding is not a knob: it is bound
+  # like any other helper line and no control is offered. See cb_demoted().
+  demoted <- cb_demoted(parsed)
   specs <- list()
 
-  for (st in parsed$stmts) {
-    if (!st$input || st$name %in% shadowed) {
+  for (i in seq_along(parsed$stmts)) {
+    st <- parsed$stmts[[i]]
+    if (!st$input || demoted[[i]]) {
       # Bind other assignments lazily: only forced if a later declaration
       # actually reads them.
       if (is.call(st$expr) && length(st$expr) == 3L &&
@@ -274,8 +335,14 @@ cb_specs <- function(parsed, data = NULL) {
       next
     }
 
-    value <- tryCatch(eval(st$expr[[3L]], env), error = function(e) e)
+    rhs <- st$expr[[3L]]
+    soft <- cb_is_soft_rhs(rhs)
+    value <- tryCatch(eval(rhs, env), error = function(e) e)
     if (inherits(value, "error")) {
+      if (soft) {
+        cb_delay(env, st$name, rhs)
+        next
+      }
       specs[[length(specs) + 1L]] <- list(
         name = st$name, line = st$line, kind = NA_character_,
         error = conditionMessage(value)
@@ -285,7 +352,12 @@ cb_specs <- function(parsed, data = NULL) {
     # Make it visible to later declarations too.
     assign(st$name, value, envir = env)
 
-    w <- cb_widget_for(value)
+    w <- cb_widget_for(value, pool = cb_is_pool_rhs(rhs))
+    if (is.null(w) && soft) {
+      # `dedup <- unique(data)` is a pipeline line, not a broken control.
+      assign(st$name, value, envir = env)
+      next
+    }
     if (!is.null(w) && identical(w$kind, "select") && !length(w$choices)) {
       # An empty factor is almost always a mistyped column name; an empty
       # dropdown would hide that.
@@ -360,9 +432,18 @@ cb_delay <- function(env, name, expr) {
     }
     rm(list = name, envir = env)
   }
+  # The binding has to accept a write too: assigning over an active binding
+  # CALLS it with the new value, so a nullary function dies with "unused
+  # argument" the moment a later declaration of the same name is evaluated
+  # into this environment.
   makeActiveBinding(
     name,
-    function() {
+    function(v) {
+      if (!missing(v)) {
+        cached <<- v
+        forced <<- TRUE
+        return(invisible(v))
+      }
       if (!forced) {
         cached <<- eval(expr, where)
         forced <<- TRUE
@@ -566,9 +647,10 @@ cb_syntactic_marks <- function(text) {
   }
   title <- c(select = "select", number = "number", text = "text",
              flag = "checkbox", date = "date")
-  shadowed <- cb_shadowed(parsed)
-  marks <- lapply(parsed$stmts, function(st) {
-    if (!st$input || is.na(st$line) || st$name %in% shadowed) {
+  demoted <- cb_demoted(parsed)
+  marks <- lapply(seq_along(parsed$stmts), function(i) {
+    st <- parsed$stmts[[i]]
+    if (!st$input || is.na(st$line) || demoted[[i]]) {
       return(NULL)
     }
     kind <- cb_kind_syntactic(st$expr[[3L]])
@@ -590,6 +672,9 @@ cb_kind_syntactic <- function(rhs) {
     if (!is.null(nm)) {
       if (nm %in% c("-", "+")) {
         return("number")
+      }
+      if (nm %in% CB_POOL_CALLS) {
+        return("select")
       }
       return(switch(nm,
         factor = "select",

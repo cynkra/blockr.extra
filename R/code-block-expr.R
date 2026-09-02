@@ -101,6 +101,18 @@ cb_subst <- function(e, subs) {
     }
     return(e)
   }
+  # `x <- v`: the left side is the name being bound, not a reference to it. A
+  # demoted declaration keeps its line in the body, and if a later declaration
+  # of the same name gave it a control, substituting here would rewrite the
+  # line into `c("a", "b") <- c("a", "b")`. An indexed target (`x[i] <- v`) is
+  # a call, and the index inside it IS a value reference, so only a bare name
+  # is skipped.
+  if (length(e) == 3L && is.name(e[[2L]]) &&
+      (identical(e[[1L]], quote(`<-`)) || identical(e[[1L]], quote(`=`)) ||
+         identical(e[[1L]], quote(`<<-`)))) {
+    e[[3L]] <- cb_subst(e[[3L]], subs)
+    return(e)
+  }
   # `x$name` / `x@name`: the right side is a literal name, not a variable.
   if (length(e) == 3L &&
       (identical(e[[1L]], quote(`$`)) || identical(e[[1L]], quote(`@`)))) {
@@ -272,6 +284,60 @@ cb_shadowed <- function(parsed) {
 }
 
 
+#' Which declarations are not controls after all?
+#'
+#' A declaration is a control unless the script itself uses the line as
+#' scaffolding, which shows up in three shapes:
+#'
+#' * the name is assigned again by a body statement (the knob's value would be
+#'   thrown away),
+#' * the name is declared a second time further down (only the last declaration
+#'   can be the control),
+#' * another declaration reads the name (`lv <- unique(data$site)` feeding
+#'   `site <- factor("Basel", lv)` is a choice pool for the knob below it, not a
+#'   knob of its own).
+#'
+#' All three are decided by reading the script, without evaluating anything.
+#'
+#' @param parsed The result of [cb_parse()].
+#' @return A logical vector over `parsed$stmts`.
+#' @noRd
+cb_demoted <- function(parsed) {
+  n <- length(parsed$stmts)
+  if (!parsed$ok || !n) {
+    return(logical(n))
+  }
+  is_input <- vapply(parsed$stmts, `[[`, logical(1L), "input")
+  nms <- vapply(parsed$stmts, `[[`, character(1L), "name")
+
+  body_assigned <- cb_assigned_names(lapply(parsed$stmts[!is_input], `[[`, "expr"))
+
+  reason <- vapply(seq_len(n), function(i) {
+    if (!is_input[[i]]) {
+      return("")
+    }
+    nm <- nms[[i]]
+    if (nm %in% body_assigned) {
+      return("assigned")
+    }
+    later <- is_input & seq_len(n) > i
+    if (any(later & !is.na(nms) & nms == nm)) {
+      return("redeclared")
+    }
+    others <- which(is_input & seq_len(n) != i)
+    read_below <- any(vapply(others, function(j) {
+      nm %in% all.names(parsed$stmts[[j]]$expr[[3L]])
+    }, logical(1L)))
+    if (read_below) "helper" else ""
+  }, character(1L))
+
+  out <- nzchar(reason)
+  attr(out, "reason") <- reason
+  attr(out, "name") <- nms
+  out
+}
+
+
 #' Compile the script into the block's expression
 #'
 #' @param parsed The result of [cb_parse()].
@@ -285,19 +351,25 @@ cb_expr <- function(parsed, specs, values = list(), data_name = "data") {
   if (!parsed$ok) {
     return(NULL)
   }
-  shadowed <- cb_shadowed(parsed)
+  demoted <- cb_demoted(parsed)
   usable <- vapply(
     specs,
-    function(s) is.null(s$error) && !is.na(s$kind) && !s$name %in% shadowed,
+    function(s) is.null(s$error) && !is.na(s$kind),
     logical(1L)
   )
   specs <- specs[usable]
 
-  body <- Filter(
-    function(st) !st$input || st$name %in% shadowed,
-    parsed$stmts
-  )
-  body <- lapply(body, `[[`, "expr")
+  # A declaration stays where it was written, as code, unless a usable control
+  # replaced it. That covers the demoted lines and, just as importantly, a
+  # declaration whose value could not be read: dropping the line while nothing
+  # substitutes the name leaves the expression referring to a symbol that does
+  # not exist.
+  live <- vapply(specs, `[[`, character(1L), "name")
+  keep <- vapply(seq_along(parsed$stmts), function(i) {
+    st <- parsed$stmts[[i]]
+    !st$input || demoted[[i]] || !st$name %in% live
+  }, logical(1L))
+  body <- lapply(parsed$stmts[keep], `[[`, "expr")
   if (!length(body)) {
     return(NULL)
   }
