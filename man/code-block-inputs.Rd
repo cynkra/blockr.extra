@@ -6,8 +6,8 @@
 \description{
 The code block's script is ordinary R. In the \emph{header} -- the run of
 assignments the script opens with -- an assignment whose right-hand side is
-a \emph{plain value} (\link{CB_VALUE_CALLS}) or a \emph{choice pool} (\link{CB_POOL_CALLS})
-becomes a control on the card; every other statement is code. A name
+a \emph{plain value} (\link{CB_VALUE_CALLS}) becomes a control on the card; every
+other statement is code. A name
 starting with a dot is never a control, which is the escape hatch for a
 header line that is scaffolding rather than a knob.
 }

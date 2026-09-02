@@ -303,45 +303,38 @@ test_that("a declaration below the header stays code, and says so", {
   expect_identical(expr_for(script)[[3L]], quote(label <- "total"))
 })
 
-test_that("a pool call declares a multi-select over what the data has", {
+test_that("a choice list the data decides is a factor over a private helper", {
+  # The common shape: candidate columns written down, narrowed to what this
+  # data has, offered as a multi-select. The narrowing line is scaffolding, so
+  # it starts with a dot; the factor is the control.
   script <- paste(
-    'vars <- intersect(names(data), c("Species", "Petal.Width", "NOPE"))',
-    'data[, vars, drop = FALSE]',
+    '.vars <- intersect(names(data), c("Species", "Petal.Width", "NOPE"))',
+    'vars <- factor(.vars, levels = .vars)',
+    'data[, as.character(vars), drop = FALSE]',
     sep = "\n"
   )
   s <- specs_for(script)
   expect_length(s, 1L)
   expect_equal(s[[1L]]$kind, "select")
   expect_true(s[[1L]]$multiple)
-  # intersect() keeps the order of its first argument, so the pool is in
+  # intersect() keeps the order of its first argument, so the choices are in
   # column order rather than the order they were written down.
   expect_equal(s[[1L]]$choices, c("Petal.Width", "Species"))
+  expect_equal(vapply(cb_syntactic_marks(script), `[[`, numeric(1L), "line"), 2)
 
-  # The pool is the default, so an untouched control keeps every column.
-  expect_equal(
-    cb_expr(cb_parse(script), s, list()),
-    bquote(.(data_slot())[, .(c("Petal.Width", "Species")), drop = FALSE])
-  )
   expect_equal(
     eval_bquoted(expr_for(script, list(vars = "Species")), iris),
     iris[, "Species", drop = FALSE]
   )
 })
 
-test_that("a pool stays a multi-select when it matches one column", {
-  # Multiplicity is fixed by the script, so a pool that narrows to one today
-  # must not turn into a text box.
-  s <- specs_for('vars <- intersect(names(data), c("Species", "NOPE"))\ndata[, vars]')
-  expect_equal(s[[1L]]$kind, "select")
-  expect_true(s[[1L]]$multiple)
-})
-
-test_that("a pool call that is not a vector is an ordinary line", {
-  # `unique()` is in the pool list, but this one returns a data frame. The line
-  # keeps its meaning, gets no control, and above all is not dropped from the
-  # body: `nrow(dedup)` must still have a `dedup`.
+test_that("a call that is not on the value list is an ordinary line", {
+  # No allowlist of "pool-shaped" calls: intersect() and unique() are code like
+  # anything else. The line keeps its meaning, gets no control, and above all
+  # is not dropped from the body -- `nrow(dedup)` must still have a `dedup`.
   script <- "dedup <- unique(data)\nnrow(dedup)"
   expect_length(specs_for(script), 0L)
+  expect_length(cb_syntactic_marks(script), 0L)
   e <- expr_for(script)
   expect_identical(e[[2L]], bquote(dedup <- unique(.(data_slot()))))
   expect_equal(eval_bquoted(e, iris), nrow(unique(iris)))
@@ -363,9 +356,9 @@ test_that("a dotted helper gets no control and no band", {
 
 test_that("a name declared twice keeps only the last control", {
   script <- paste(
-    'vars <- c("Species", "Petal.Width")',
-    'vars <- intersect(vars, names(data))',
-    'data[, vars, drop = FALSE]',
+    'n <- 6',
+    'n <- 10',
+    'utils::head(data, n)',
     sep = "\n"
   )
   p <- cb_parse(script)
@@ -374,9 +367,10 @@ test_that("a name declared twice keeps only the last control", {
   s <- cb_specs(p, iris)
   expect_length(s, 1L)
   expect_equal(s[[1L]]$line, 2)
-  expect_match(cb_rest_label(s, p), "vars declared twice")
+  expect_equal(s[[1L]]$default, 10)
+  expect_match(cb_rest_label(s, p), "n declared twice")
   # The first line is not a control, so it has to survive as code.
-  expect_identical(expr_for(script)[[2L]], quote(vars <- c("Species", "Petal.Width")))
+  expect_identical(expr_for(script)[[2L]], quote(n <- 6))
 })
 
 test_that("an assignment target is not substituted, but its index is", {
