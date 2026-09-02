@@ -244,6 +244,42 @@ test_that("a name the body assigns stays code and offers no control", {
   expect_equal(eval_bquoted(e, iris), utils::head(iris, nrow(iris)))
 })
 
+test_that("a re-assigned declaration gets neither a control nor a band", {
+  script <- paste(
+    'keep <- c("Sepal.Length", "Petal.Length", "Missing")',
+    'keep <- intersect(keep, names(data))',
+    '',
+    'col <- factor(keep, levels = keep)',
+    '',
+    'data[, as.character(col), drop = FALSE]',
+    sep = "\n"
+  )
+  p <- cb_parse(script)
+  expect_equal(cb_shadowed(p), "keep")
+
+  specs <- cb_specs(p, iris)
+  expect_equal(vapply(specs, `[[`, character(1L), "name"), "col")
+
+  # The editor paints exactly the lines that became controls, so line 1 has no
+  # band either.
+  expect_equal(vapply(cb_syntactic_marks(script), `[[`, numeric(1L), "line"), 4)
+})
+
+test_that("`x <- f(x)` reads the previous binding instead of itself", {
+  # The re-assignment is an ordinary lazy helper line; without carrying the old
+  # binding into it, reading `keep` below would recurse into itself.
+  specs <- specs_for(paste(
+    'keep <- c("Sepal.Length", "Nope")',
+    'keep <- intersect(keep, names(data))',
+    'col <- factor(keep, levels = keep)',
+    'data[, as.character(col), drop = FALSE]',
+    sep = "\n"
+  ))
+  expect_length(specs, 1L)
+  expect_null(specs[[1L]]$error)
+  expect_equal(specs[[1L]]$choices, "Sepal.Length")
+})
+
 test_that("multiple body statements are wrapped in a single braced expression", {
   e <- expr_for('n <- 2\n\ntmp <- utils::head(data, n)\nnrow(tmp)')
   expect_identical(e[[1L]], quote(`{`))

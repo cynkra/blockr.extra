@@ -23,6 +23,12 @@
 #' line*, not a *place in the script*, so a line is classified on its own and
 #' the editor paints the ones that became controls.
 #'
+#' A name the script assigns again is not a control: `keep <- c("a", "b")`
+#' followed by `keep <- intersect(keep, names(data))` is a helper line, not a
+#' knob, because the second assignment throws the knob's value away. Both lines
+#' stay code, the editor bands neither, and the footer says which name was
+#' demoted.
+#'
 #' A **factor** is how a select is expressed without any blockr vocabulary: its
 #' levels are the choice list, and the length of its value decides single or
 #' multiple. That covers a data-fed dropdown (`unique(data$site)` as levels) and

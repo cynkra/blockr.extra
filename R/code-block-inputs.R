@@ -255,10 +255,14 @@ cb_specs <- function(parsed, data = NULL) {
   }
 
   env <- blockr.core::eval_env(list(data = data))
+  # A declaration the script assigns again is not a knob -- the second
+  # assignment throws the knob's value away, so a control for it would be dead.
+  # It is bound like any other helper line and reported in the footer instead.
+  shadowed <- cb_shadowed(parsed)
   specs <- list()
 
   for (st in parsed$stmts) {
-    if (!st$input) {
+    if (!st$input || st$name %in% shadowed) {
       # Bind other assignments lazily: only forced if a later declaration
       # actually reads them.
       if (is.call(st$expr) && length(st$expr) == 3L &&
@@ -341,14 +345,26 @@ cb_delay <- function(env, name, expr) {
   # bound; script order wins, and `makeActiveBinding()` refuses to shadow a
   # regular binding. (`exists()` would force an active binding, so check the
   # names directly.)
+  #
+  # `x <- f(x)` is ordinary R and reads the OLD `x`, so the old binding is
+  # carried into a child environment the new one evaluates in. Without that,
+  # the binding reads itself and the declaration below it dies with "infinite
+  # recursion" instead of seeing the narrowed value.
+  where <- env
   if (name %in% ls(env, all.names = TRUE)) {
+    where <- new.env(parent = env)
+    if (bindingIsActive(name, env)) {
+      makeActiveBinding(name, activeBindingFunction(name, env), where)
+    } else {
+      assign(name, get(name, envir = env, inherits = FALSE), envir = where)
+    }
     rm(list = name, envir = env)
   }
   makeActiveBinding(
     name,
     function() {
       if (!forced) {
-        cached <<- eval(expr, env)
+        cached <<- eval(expr, where)
         forced <<- TRUE
       }
       cached
@@ -536,6 +552,10 @@ cb_mark_title <- function(s) {
 #' glyph; the real specs (choices, multiplicity, defaults) still come from
 #' [cb_specs()] on the committed script.
 #'
+#' Re-assignment is syntactic too, so a declaration the script overwrites
+#' further down gets no band either: what the editor paints and what turns into
+#' a control are the same set of lines.
+#'
 #' @param text The script (usually the live editor text).
 #' @return The same mark records [cb_editor_marks()] produces.
 #' @noRd
@@ -546,8 +566,9 @@ cb_syntactic_marks <- function(text) {
   }
   title <- c(select = "select", number = "number", text = "text",
              flag = "checkbox", date = "date")
+  shadowed <- cb_shadowed(parsed)
   marks <- lapply(parsed$stmts, function(st) {
-    if (!st$input || is.na(st$line)) {
+    if (!st$input || is.na(st$line) || st$name %in% shadowed) {
       return(NULL)
     }
     kind <- cb_kind_syntactic(st$expr[[3L]])
