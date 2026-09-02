@@ -285,22 +285,49 @@ test_that("a dotted name is never a control, whatever it is assigned", {
   expect_equal(eval_bquoted(e, iris), utils::head(iris, 6))
 })
 
-test_that("a declaration below the header stays code, and says so", {
+test_that("controls can sit below a preamble that derives from the data", {
+  # Work out the grouping column from the data, then declare the controls
+  # under it. Position does not decide anything: the declarations are the
+  # factor lines, wherever they are.
   script <- paste(
-    'n <- 6',
-    'out <- utils::head(data, n)',
-    'label <- "total"',
-    'out',
+    'group_var <- names(data)[[5L]]',
+    'if (!group_var %in% names(data)) {',
+    '  group_var <- names(data)[[1L]]',
+    '}',
+    'group_levels <- sort(unique(as.character(data[[group_var]])))',
+    '',
+    'stats <- factor("n", levels = c("n", "mean"))',
+    '`Pool members` <- factor(character(0), levels = group_levels)',
+    '',
+    'data[data[[group_var]] %in% as.character(`Pool members`), , drop = FALSE]',
     sep = "\n"
   )
-  p <- cb_parse(script)
-  expect_equal(vapply(p$stmts, `[[`, logical(1L), "input"), c(TRUE, FALSE, FALSE, FALSE))
-  expect_true(p$stmts[[3L]]$late)
-  expect_equal(vapply(cb_syntactic_marks(script), `[[`, numeric(1L), "line"), 1)
-  expect_match(cb_rest_label(cb_specs(p, iris), p), "line 3")
+  s <- specs_for(script)
+  expect_equal(vapply(s, `[[`, character(1L), "name"), c("stats", "Pool members"))
+  expect_equal(s[[2L]]$choices, c("setosa", "versicolor", "virginica"))
+  expect_true(s[[2L]]$multiple)
+  expect_equal(vapply(cb_syntactic_marks(script), `[[`, numeric(1L), "line"), c(7, 8))
+})
 
-  # It is still an ordinary assignment, so it has to survive as code.
-  expect_identical(expr_for(script)[[3L]], quote(label <- "total"))
+test_that("a preamble statement a declaration depends on is run", {
+  # `if` cannot be bound lazily, so it has to happen before the declaration
+  # below it is evaluated. Otherwise the fallback the author wrote never
+  # applies and the control comes back as an error.
+  script <- paste(
+    'group_var <- "NOPE"',
+    'if (!group_var %in% names(data)) {',
+    '  group_var <- "Species"',
+    '}',
+    'pick <- factor(character(0), levels = unique(data[[group_var]]))',
+    'data[data$Species %in% as.character(pick), ]',
+    sep = "\n"
+  )
+  s <- specs_for(script)
+  # `group_var` is a literal, so it is a control in its own right, and the
+  # `if` reassigns it, so it is demoted.
+  expect_equal(vapply(s, `[[`, character(1L), "name"), "pick")
+  expect_null(s[[1L]]$error)
+  expect_equal(s[[1L]]$choices, c("setosa", "versicolor", "virginica"))
 })
 
 test_that("a choice list the data decides is a factor over a private helper", {

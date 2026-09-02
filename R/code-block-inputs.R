@@ -1,19 +1,18 @@
 #' The inputs layer of the code block
 #'
-#' The code block's script is ordinary R. In the *header* -- the run of
-#' assignments the script opens with -- an assignment whose right-hand side is
-#' a *plain value* ([CB_VALUE_CALLS]) becomes a control on the card; every
-#' other statement is code. A name
-#' starting with a dot is never a control, which is the escape hatch for a
-#' header line that is scaffolding rather than a knob.
+#' The code block's script is ordinary R. A top-level assignment whose
+#' right-hand side is a *plain value* ([CB_VALUE_CALLS]) becomes a control on
+#' the card; every other statement is code. A name starting with a dot is
+#' never a control, which is how a line that happens to look like a
+#' declaration says it is scaffolding.
 #'
-#' All of it is decidable by reading the script, without evaluating anything.
-#'
-#' There is deliberately no fenced region and no marker comment. The header is
-#' where the declarations stop, so nothing has to be delimited and nothing can
-#' be mis-delimited. The editor paints the lines that became controls (see
-#' `blockr-code-inputs` in `srcjs/code-block/index.js`), which is what tells
-#' the user which lines are special.
+#' Both are decidable by reading the line, without evaluating anything and
+#' without regard to where in the script it sits. There is deliberately no
+#' fenced region, no marker comment and no header: an input is a *kind of
+#' line*, not a *place in the script*, so nothing has to be delimited and
+#' nothing can be mis-delimited. The editor paints the lines that became
+#' controls (see `blockr-code-inputs` in `srcjs/code-block/index.js`), which is
+#' what tells the user which lines are special.
 #'
 #' @name code-block-inputs
 #' @keywords internal
@@ -52,8 +51,7 @@ CB_GLYPHS <- c(select = "\u25be", number = "#", text = "Aa", flag = "\u2713",
 
 #' Is this statement an assignment to a bare name?
 #'
-#' The shape that can open a declaration, whether or not it turns out to be
-#' one. The run of these at the top of the script is the header.
+#' The shape a declaration has to have, whether or not it turns out to be one.
 #'
 #' @param e A top-level expression from [parse()].
 #' @noRd
@@ -73,8 +71,8 @@ cb_is_assign_stmt <- function(e) {
 #'
 #' The escape hatch, and it is the one R already has: a leading dot means
 #' internal. `ls()` hides those names, so does a file manager, and so does
-#' this. It is how a header line that computes something from the data says it
-#' is scaffolding for the knobs below it rather than a knob.
+#' this. It is how a line that would otherwise be read as a knob says it is
+#' scaffolding for the knobs around it.
 #'
 #' @param name A variable name.
 #' @noRd
@@ -142,16 +140,10 @@ cb_call_name <- function(head) {
 
 #' Split a script into input declarations and body statements
 #'
-#' Declarations are the *header*: the run of assignments the script opens with.
-#' The first statement that is not an assignment ends it, and everything from
-#' there down is code however it is written. Knobs belong at the top of a
-#' script anyway, and bounding them that way is what lets a helper line keep
-#' its ordinary meaning further down.
-#'
 #' @param text The script.
 #' @return A list with `ok`, `error` (parse message or `NULL`), `stmts` (one
-#'   record per top-level statement: `expr`, `line`, `input`, `name`, `late`)
-#'   and `lines` (the raw source lines, for annotation lookup).
+#'   record per top-level statement: `expr`, `line`, `input`, `name`) and
+#'   `lines` (the raw source lines, for annotation lookup).
 #' @noRd
 cb_parse <- function(text) {
   if (is.null(text) || !nzchar(trimws(text))) {
@@ -167,31 +159,14 @@ cb_parse <- function(text) {
   }
 
   refs <- utils::getSrcref(exprs)
-  # The header is the run of declarations and dotted helpers the script opens
-  # with. The first line that is neither -- a real computation, or anything
-  # that is not an assignment at all -- ends it, and from there down every
-  # statement is code.
-  opens_header <- vapply(seq_along(exprs), function(i) {
-    e <- exprs[[i]]
-    if (cb_is_input_stmt(e)) {
-      return(TRUE)
-    }
-    cb_is_assign_stmt(e) && cb_is_private_name(as.character(e[[2L]]))
-  }, logical(1L))
-  in_header <- cumprod(as.integer(opens_header)) > 0L
   stmts <- lapply(seq_along(exprs), function(i) {
     e <- exprs[[i]]
-    declares <- cb_is_input_stmt(e)
-    is_input <- declares && in_header[[i]]
+    is_input <- cb_is_input_stmt(e)
     list(
       expr = e,
       line = if (is.null(refs) || is.null(refs[[i]])) NA_integer_ else
         as.integer(refs[[i]])[1L],
       input = is_input,
-      # A line that would have been a control had it been in the header. The
-      # footer says so, because a knob that silently does not appear is the
-      # one failure this rule can produce.
-      late = declares && !in_header[[i]],
       name = if (is_input) as.character(e[[2L]]) else NA_character_
     )
   })
@@ -300,6 +275,12 @@ cb_widget_for <- function(v) {
 #' `lv <- unique(data$site)` is available to a later `factor(x, lv)` without the
 #' pipeline above it ever being run.
 #'
+#' A statement that is not an assignment cannot be bound lazily, so the ones
+#' *above the last declaration* are simply run: a preamble that works the
+#' grouping column out with an `if` has to have happened before the
+#' declarations under it are evaluated. Nothing below the last declaration is
+#' touched, which is where the pipeline lives.
+#'
 #' @param parsed The result of [cb_parse()].
 #' @param data The upstream data frame (may be `NULL` before it arrives).
 #' @return A list of spec records.
@@ -310,6 +291,8 @@ cb_specs <- function(parsed, data = NULL) {
   }
 
   env <- blockr.core::eval_env(list(data = data))
+  is_input <- vapply(parsed$stmts, `[[`, logical(1L), "input")
+  last_decl <- if (any(is_input)) max(which(is_input)) else 0L
   # A declaration the script uses as scaffolding is not a knob: it is bound
   # like any other helper line and no control is offered. See cb_demoted().
   demoted <- cb_demoted(parsed)
@@ -320,11 +303,13 @@ cb_specs <- function(parsed, data = NULL) {
     if (!st$input || demoted[[i]]) {
       # Bind other assignments lazily: only forced if a later declaration
       # actually reads them.
-      if (is.call(st$expr) && length(st$expr) == 3L &&
-          (identical(st$expr[[1L]], quote(`<-`)) ||
-             identical(st$expr[[1L]], quote(`=`))) &&
-          is.name(st$expr[[2L]])) {
+      if (cb_is_assign_stmt(st$expr)) {
         cb_delay(env, as.character(st$expr[[2L]]), st$expr[[3L]])
+      } else if (i < last_decl) {
+        # Not an assignment, so there is nothing to defer. A declaration below
+        # it may depend on what it does, and it fails on its own account when
+        # the block runs, so a failure here is not reported twice.
+        try(eval(st$expr, env), silent = TRUE)
       }
       next
     }

@@ -286,9 +286,9 @@ cb_shadowed <- function(parsed) {
 
 #' Which declarations are not controls after all?
 #'
-#' A header declaration is a control unless the script assigns the name again,
-#' which happens two ways: a body statement writes it (the knob's value would
-#' be thrown away), or a second declaration further down replaces it (only the
+#' A declaration is a control unless the script assigns the name again, which
+#' happens two ways: a body statement writes it (the knob's value would be
+#' thrown away), or a second declaration further down replaces it (only the
 #' last one can be the control). Both are decided by reading the script,
 #' without evaluating anything.
 #'

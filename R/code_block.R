@@ -5,46 +5,38 @@
 #' statement returns.
 #'
 #' @section Inputs:
-#' A top-level assignment whose right-hand side is a **value** or a **choice
-#' pool** becomes a control on the card. Everything else is code.
-#'
-#' A value is a literal, or a call to `c()`, `factor()`, `as.Date()` or
-#' `as.POSIXct()`. A pool is a call to `intersect()`, `setdiff()`, `union()`,
-#' `unique()`, `sort()`, `rev()`, `names()`, `colnames()` or `levels()`, which
-#' is how choices that only the data knows are written down.
+#' A top-level assignment whose right-hand side is a **plain value** becomes a
+#' control on the card, meaning a literal or a call to `c()`, `factor()`,
+#' `as.Date()` or `as.POSIXct()`. Everything else is code.
 #'
 #' ```r
-#' species <- factor("setosa", unique(data$Species))     # a dropdown
-#' vars <- intersect(names(data), c("AGE", "SEX"))       # a multi-select
-#' n <- 10                                               # a number box
-#' desc <- TRUE                                          # a checkbox
+#' .vars <- intersect(c("AGE", "SEX", "TRT"), names(data))  # private, no control
+#'
+#' vars <- factor(.vars, levels = .vars)                # a multi-select
+#' species <- factor("setosa", unique(data$Species))    # a dropdown
+#' n <- 10                                              # a number box
+#' desc <- TRUE                                         # a checkbox
 #'
 #' data |>
-#'   dplyr::filter(Species == species) |>
+#'   dplyr::filter(Species %in% species) |>
 #'   dplyr::slice_head(n = n)
 #' ```
 #'
-#' There is no fenced region and no marker comment. The *shape of the line*
-#' says which widget it would be, so a line is read on its own and the editor
-#' paints the ones that became controls.
+#' There is no fenced region, no marker comment and no header. An input is a
+#' *kind of line*, not a *place in the script*, so a line is read on its own
+#' wherever it sits and the editor paints the ones that became controls.
 #'
-#' A pool is always a multi-select over its own elements, whatever its length,
-#' and a pool call that does not evaluate to a vector is not a control at all —
-#' `dedup <- unique(data)` stays an ordinary line.
+#' @section Keeping a line to yourself:
+#' **A name starting with a dot is never a control.** It is R's own convention
+#' for something internal, and here it is the escape hatch: a line that works
+#' something out from the data, or holds a list you only use to build a choice
+#' list, says so by starting with a dot. It is still an ordinary variable the
+#' rest of the script can read, and it is only evaluated if something reads it.
 #'
-#' @section Lines that look like controls but are not:
-#' A declaration the script uses as scaffolding gets no control and no band:
-#'
-#' * the name is assigned again by the body (the knob's value would be thrown
-#'   away),
-#' * the name is declared twice (only the last one can be the control),
-#' * another declaration reads the name — `lv <- unique(data$site)` feeding
-#'   `site <- factor("Basel", lv)` is the pool for the knob below it, not a
-#'   knob of its own.
-#'
-#' All three are read off the script. The first two are reported in the editor
-#' footer, because a knob quietly disappearing is worth a word; the third is
-#' the convention working.
+#' One other line gets no control, and the editor footer names it because a
+#' knob quietly not appearing is worth a word: a name the script assigns again.
+#' The knob's value would be thrown away, so only the last assignment can be
+#' the control.
 #'
 #' A **factor** is how a select is expressed without any blockr vocabulary: its
 #' levels are the choice list, and the length of its value decides single or
@@ -318,21 +310,12 @@ cb_rest_label <- function(specs, parsed) {
       paste(unique(name[hit]), collapse = ", ")
     ))
   }
-  # The header rule's one failure mode: a control that does not appear because
-  # the line sits below the first real statement. Say where.
-  late <- Filter(function(st) isTRUE(st$late), parsed$stmts)
-  if (length(late)) {
-    return(sprintf(
-      "line %s is below the first statement, so it stays code",
-      late[[1L]]$line
-    ))
-  }
   n <- length(specs)
   if (!n) {
-    return("no inputs · assign a value at the top of the script to get a control")
+    return("no inputs · assign a plain value to get a control")
   }
   sprintf(
-    "%d input%s · assignments at the top become controls, .name stays private",
+    "%d input%s · lines assigning a plain value become controls, .name stays private",
     n, if (n == 1L) "" else "s"
   )
 }

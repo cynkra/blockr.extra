@@ -25,48 +25,39 @@ statement returns.
 }
 \section{Inputs}{
 
-A top-level assignment whose right-hand side is a \strong{value} or a \strong{choice
-pool} becomes a control on the card. Everything else is code.
+A top-level assignment whose right-hand side is a \strong{plain value} becomes a
+control on the card, meaning a literal or a call to \code{c()}, \code{factor()},
+\code{as.Date()} or \code{as.POSIXct()}. Everything else is code.
 
-A value is a literal, or a call to \code{c()}, \code{factor()}, \code{as.Date()} or
-\code{as.POSIXct()}. A pool is a call to \code{intersect()}, \code{setdiff()}, \code{union()},
-\code{unique()}, \code{sort()}, \code{rev()}, \code{names()}, \code{colnames()} or \code{levels()}, which
-is how choices that only the data knows are written down.
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{.vars <- intersect(c("AGE", "SEX", "TRT"), names(data))  # private, no control
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{species <- factor("setosa", unique(data$Species))     # a dropdown
-vars <- intersect(names(data), c("AGE", "SEX"))       # a multi-select
-n <- 10                                               # a number box
-desc <- TRUE                                          # a checkbox
+vars <- factor(.vars, levels = .vars)                # a multi-select
+species <- factor("setosa", unique(data$Species))    # a dropdown
+n <- 10                                              # a number box
+desc <- TRUE                                         # a checkbox
 
 data |>
-  dplyr::filter(Species == species) |>
+  dplyr::filter(Species \%in\% species) |>
   dplyr::slice_head(n = n)
 }\if{html}{\out{</div>}}
 
-There is no fenced region and no marker comment. The \emph{shape of the line}
-says which widget it would be, so a line is read on its own and the editor
-paints the ones that became controls.
-
-A pool is always a multi-select over its own elements, whatever its length,
-and a pool call that does not evaluate to a vector is not a control at all —
-\code{dedup <- unique(data)} stays an ordinary line.
+There is no fenced region, no marker comment and no header. An input is a
+\emph{kind of line}, not a \emph{place in the script}, so a line is read on its own
+wherever it sits and the editor paints the ones that became controls.
 }
 
-\section{Lines that look like controls but are not}{
+\section{Keeping a line to yourself}{
 
-A declaration the script uses as scaffolding gets no control and no band:
-\itemize{
-\item the name is assigned again by the body (the knob's value would be thrown
-away),
-\item the name is declared twice (only the last one can be the control),
-\item another declaration reads the name — \code{lv <- unique(data$site)} feeding
-\code{site <- factor("Basel", lv)} is the pool for the knob below it, not a
-knob of its own.
-}
+\strong{A name starting with a dot is never a control.} It is R's own convention
+for something internal, and here it is the escape hatch: a line that works
+something out from the data, or holds a list you only use to build a choice
+list, says so by starting with a dot. It is still an ordinary variable the
+rest of the script can read, and it is only evaluated if something reads it.
 
-All three are read off the script. The first two are reported in the editor
-footer, because a knob quietly disappearing is worth a word; the third is
-the convention working.
+One other line gets no control, and the editor footer names it because a
+knob quietly not appearing is worth a word: a name the script assigns again.
+The knob's value would be thrown away, so only the last assignment can be
+the control.
 
 A \strong{factor} is how a select is expressed without any blockr vocabulary: its
 levels are the choice list, and the length of its value decides single or

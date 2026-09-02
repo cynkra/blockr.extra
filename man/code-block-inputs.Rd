@@ -4,20 +4,19 @@
 \alias{code-block-inputs}
 \title{The inputs layer of the code block}
 \description{
-The code block's script is ordinary R. In the \emph{header} -- the run of
-assignments the script opens with -- an assignment whose right-hand side is
-a \emph{plain value} (\link{CB_VALUE_CALLS}) becomes a control on the card; every
-other statement is code. A name
-starting with a dot is never a control, which is the escape hatch for a
-header line that is scaffolding rather than a knob.
+The code block's script is ordinary R. A top-level assignment whose
+right-hand side is a \emph{plain value} (\link{CB_VALUE_CALLS}) becomes a control on
+the card; every other statement is code. A name starting with a dot is
+never a control, which is how a line that happens to look like a
+declaration says it is scaffolding.
 }
 \details{
-All of it is decidable by reading the script, without evaluating anything.
-
-There is deliberately no fenced region and no marker comment. The header is
-where the declarations stop, so nothing has to be delimited and nothing can
-be mis-delimited. The editor paints the lines that became controls (see
-\code{blockr-code-inputs} in \code{srcjs/code-block/index.js}), which is what tells
-the user which lines are special.
+Both are decidable by reading the line, without evaluating anything and
+without regard to where in the script it sits. There is deliberately no
+fenced region, no marker comment and no header: an input is a \emph{kind of
+line}, not a \emph{place in the script}, so nothing has to be delimited and
+nothing can be mis-delimited. The editor paints the lines that became
+controls (see \code{blockr-code-inputs} in \code{srcjs/code-block/index.js}), which is
+what tells the user which lines are special.
 }
 \keyword{internal}
