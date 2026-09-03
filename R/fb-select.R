@@ -81,10 +81,15 @@ fb_select_options <- function(choices) {
 #' @param selected Initial selection (scalar for single, vector for multi).
 #' @param multiple Whether to mount a multi-select.
 #' @param placeholder Placeholder text for the empty control.
+#' @param single_line Keep a multi-select's tags on one row, collapsing the
+#'   overflow into a `+N` chip. On by default here: these fields sit in a grid
+#'   whose row height is set by its tallest field, so a wrapping select makes
+#'   the whole band tall.
 #' @return A Shiny tag.
 #' @noRd
 fb_select_input <- function(input_id, label, choices, selected,
-                            multiple = FALSE, placeholder = NULL) {
+                            multiple = FALSE, placeholder = NULL,
+                            single_line = TRUE) {
   options <- fb_select_options(choices)
   selected <- as.character(selected)
 
@@ -96,7 +101,8 @@ fb_select_input <- function(input_id, label, choices, selected,
       `data-multiple` = if (isTRUE(multiple)) "true" else "false",
       `data-options` = jsonlite::toJSON(options, auto_unbox = TRUE),
       `data-selected` = jsonlite::toJSON(selected, auto_unbox = !isTRUE(multiple)),
-      `data-placeholder` = if (is.null(placeholder)) "" else placeholder
+      `data-placeholder` = if (is.null(placeholder)) "" else placeholder,
+      `data-single-line` = if (isTRUE(single_line)) "true" else "false"
     )
   )
 }
