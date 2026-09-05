@@ -765,12 +765,27 @@ test_that("an empty factor declares a multi-select with nothing picked", {
 
 # ---- params grid ----------------------------------------------------------
 
-test_that("the params grid clamps its column count in every container band", {
-  # A band carries min(fields, cap) rather than a literal, so a two-field grid
-  # is never widened into a row with an empty trailing track.
-  expect_identical(fb_grid_cols(2), "--fb-cols:2; --fb-cols-md:2; --fb-cols-sm:2;")
-  expect_identical(fb_grid_cols(3), "--fb-cols:3; --fb-cols-md:3; --fb-cols-sm:2;")
-  expect_identical(fb_grid_cols(7), "--fb-cols:4; --fb-cols-md:3; --fb-cols-sm:2;")
+test_that("every field says what kind of control it is", {
+  # The band shares out width by kind, so the markup has to carry it. Guessing
+  # from the contents would mean `:has()`, which restyles a whole Shiny page.
+  html <- as.character(cb_params_ui(
+    specs_for('x <- factor(c("a"), c("a", "b"))\nn <- 10\ndesc <- TRUE\nt <- "hi"'),
+    identity
+  ))
+
+  expect_match(html, "fb-field--select", fixed = TRUE)
+  expect_match(html, "fb-field--number", fixed = TRUE)
+  expect_match(html, "fb-field--flag", fixed = TRUE)
+  expect_match(html, "fb-field--text", fixed = TRUE)
+})
+
+
+test_that("a checkbox field carries a spacer where its label row would be", {
+  # A checkbox labels itself beside the box, so without the spacer it starts a
+  # label's height above the fields either side of it.
+  html <- as.character(cb_params_ui(specs_for("desc <- TRUE"), identity))
+
+  expect_match(html, "fb-field-label--spacer", fixed = TRUE)
 })
 
 

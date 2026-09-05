@@ -13,7 +13,8 @@
  *        data-options='[{"value":"a","label":"A"}, ...]'
  *        data-selected='"a"'  (single) | '["a","b"]' (multi)
  *        data-placeholder="Select…"
- *        data-single-line="true|false"></div>
+ *        data-single-line="true|false"
+ *        data-tag-chars="16"></div>
  *
  * Depends on: blockr-core.js, blockr-select.js (via blockr_select_dep()).
  */
@@ -39,6 +40,9 @@
     // wraps its tags is what makes the generated band tall. One row plus a
     // "+N" chip instead.
     const singleLine = el.getAttribute('data-single-line') !== 'false';
+    // Long values are the norm here (arm labels, derived variable names), and
+    // one of them can fill the row on its own.
+    const tagChars = parseInt(el.getAttribute('data-tag-chars'), 10) || 0;
 
     const slot = document.createElement('div');
     el.appendChild(slot);
@@ -50,6 +54,7 @@
       placeholder: placeholder,
       reorderable: true,
       singleLine: multiple && singleLine,
+      maxTagChars: tagChars,
       onChange: () => {
         if (typeof el._fbOnChange === 'function') el._fbOnChange();
       }

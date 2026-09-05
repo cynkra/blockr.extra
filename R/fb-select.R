@@ -85,11 +85,14 @@ fb_select_options <- function(choices) {
 #'   overflow into a `+N` chip. On by default here: these fields sit in a grid
 #'   whose row height is set by its tallest field, so a wrapping select makes
 #'   the whole band tall.
+#' @param tag_chars Shorten tag labels longer than this, cutting the middle so
+#'   both ends survive (the full value stays on hover). Clinical values run
+#'   long enough that one tag can fill the row on its own.
 #' @return A Shiny tag.
 #' @noRd
 fb_select_input <- function(input_id, label, choices, selected,
                             multiple = FALSE, placeholder = NULL,
-                            single_line = TRUE) {
+                            single_line = TRUE, tag_chars = 16L) {
   options <- fb_select_options(choices)
   selected <- as.character(selected)
 
@@ -102,7 +105,8 @@ fb_select_input <- function(input_id, label, choices, selected,
       `data-options` = jsonlite::toJSON(options, auto_unbox = TRUE),
       `data-selected` = jsonlite::toJSON(selected, auto_unbox = !isTRUE(multiple)),
       `data-placeholder` = if (is.null(placeholder)) "" else placeholder,
-      `data-single-line` = if (isTRUE(single_line)) "true" else "false"
+      `data-single-line` = if (isTRUE(single_line)) "true" else "false",
+      `data-tag-chars` = as.character(tag_chars)
     )
   )
 }

@@ -164,48 +164,69 @@
  * width (set by the dock panel), not the viewport — same idiom as blockr.dplyr. */
 .function-block-container { width: 100%; padding-bottom: 10px; container-type: inline-size; }
 
-/* Params grid — fixed column counts (not auto-fit), so an odd leftover field
- * keeps its column share instead of stretching to full width. A single field
- * spans the full row; wide blocks step up to 3 columns, narrow ones collapse
- * to a single stacked column. */
 .function-block-params { margin-bottom: 8px; }
 
-/* Params grid. Column count is driven by `--fb-cols` (set from R to the field
- * count, capped at 4) so N fields never leave an empty trailing column — 2
- * fields fill the row 50/50. Fixed tracks (not auto-fit) mean an odd leftover
- * keeps its column share instead of stretching to full width.
+/* --- The params band -------------------------------------------------------
+ * A flex row, not a grid of equal columns. A script produces whatever mix of
+ * controls it likes, and equal columns serve none of them: at a half-width
+ * dock panel four tracks give a select 154px, where one tag plus the overflow
+ * chip is all that fits, while the checkbox next to it wastes the same 154px.
  *
- * Each container band carries its OWN clamped count rather than a literal, for
- * the same reason: a literal `repeat(3, …)` in the mid band would widen a
- * two-field grid into three tracks and leave one empty, which is precisely
- * what the count is capped to avoid. R sets all three, so every band is
- * `min(fields, band cap)` and the ladder only ever steps down.
- *
- * The bands are set by a floor on the TRACK, not on the panel: a column stops
- * being useful below ~150px, so each band ends where its own tracks would
- * cross that. With a 12px gap that is 636 / 474 / 312, rounded. Four columns
- * therefore survive well into a half-width dock panel, which is where a
- * control-heavy script actually sits. */
+ * So each field asks for the width its kind needs (`flex-basis`) and takes a
+ * share of what is left over (`flex-grow`), and the row wraps when the bases
+ * no longer fit. Measured over ten plausible scripts, this holds one row where
+ * the old grid held one, and only costs a row where a select genuinely needs
+ * the room. The caps stop a band of knobs from stretching a number input
+ * across a 1768px panel. */
 .fb-params-grid {
-  display: grid;
-  gap: 12px 12px;
-  grid-template-columns: repeat(var(--fb-cols, 2), minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
-.fb-params-grid > .block-input-wrapper:only-child {
-  grid-column: 1 / -1;
+.fb-params-grid > .block-input-wrapper {
+  flex: 1 1 160px;
+  max-width: 340px;
+  min-width: 0;
 }
-@container (max-width: 640px) {
-  .fb-params-grid {
-    grid-template-columns: repeat(var(--fb-cols-md, 3), minmax(0, 1fr));
-  }
+.fb-params-grid > .fb-field--select {
+  flex: 3 1 300px;
+  max-width: none;
 }
-@container (max-width: 480px) {
-  .fb-params-grid {
-    grid-template-columns: repeat(var(--fb-cols-sm, 2), minmax(0, 1fr));
-  }
+.fb-params-grid > .fb-field--text {
+  flex: 2 1 220px;
+  max-width: 520px;
 }
-@container (max-width: 320px) {
-  .fb-params-grid { grid-template-columns: 1fr; }
+.fb-params-grid > .fb-field--flag {
+  flex: 1 1 140px;
+  max-width: 260px;
+}
+
+/* A checkbox carries its label beside the box, so its field is a control with
+ * no label row. The spacer holds that row open (fb_field_wrapper()) and the
+ * box gets the same 42px shell as every other control, so a flag sits level
+ * with the fields either side instead of 23px above them. */
+.fb-field--flag .fb-field-label--spacer {
+  visibility: hidden;
+}
+.fb-field--flag .checkbox {
+  margin: 0;
+}
+.fb-field--flag .checkbox label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  background-color: var(--blockr-color-bg-input, #f9fafb);
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  /* --blockr-radius-lg */
+  border-radius: 8px;
+  cursor: pointer;
+}
+.fb-field--flag .checkbox input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
 }
 
 /* --- Auto-generated parameter fields ---------------------------------------

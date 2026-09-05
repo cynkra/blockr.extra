@@ -524,7 +524,7 @@ cb_input_ui <- function(spec, ns, value = NULL) {
   if (is.null(inner)) {
     return(NULL)
   }
-  shiny::div(class = "block-input-wrapper", inner)
+  fb_field_wrapper(spec$kind, inner)
 }
 
 
@@ -542,7 +542,6 @@ cb_params_ui <- function(specs, ns, values = list()) {
   }
   shiny::div(
     class = "fb-params-grid",
-    style = fb_grid_cols(length(fields)),
     fields
   )
 }
