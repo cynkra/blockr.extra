@@ -540,8 +540,13 @@ cb_params_ui <- function(specs, ns, values = list()) {
   if (!length(fields)) {
     return(NULL)
   }
+  # Read the kinds back off the fields that survived, not off `ok`: a spec can
+  # produce no control, and the band's track floor has to describe what is
+  # actually in it.
+  band <- fb_grid_track(vapply(fields, fb_field_kind, character(1L)))
   shiny::div(
-    class = "fb-params-grid",
+    class = paste("fb-params-grid", band$class),
+    style = band$style,
     fields
   )
 }

@@ -780,6 +780,22 @@ test_that("every field says what kind of control it is", {
 })
 
 
+test_that("the band steps down the ladder its contents need", {
+  # A band with a select is laid out for the select: at a half-width panel that
+  # is two columns where the knob ladder would still be showing four.
+  expect_identical(fb_grid_track(c("select", "number", "flag"))$class, "fb-band--wide")
+  expect_identical(fb_grid_track(c("text", "number"))$class, "fb-band--wide")
+  expect_identical(fb_grid_track(c("number", "flag", "date"))$class, "fb-band--knobs")
+
+  # The counts stay clamped to the field count, so a two-field band is never
+  # widened into a row with an empty trailing track.
+  expect_identical(fb_grid_track(rep("number", 7L))$style,
+                   "--fb-cols:4; --fb-cols-3:3; --fb-cols-2:2;")
+  expect_identical(fb_grid_track(c("number", "flag"))$style,
+                   "--fb-cols:2; --fb-cols-3:2; --fb-cols-2:2;")
+})
+
+
 test_that("a checkbox field carries a spacer where its label row would be", {
   # A checkbox labels itself beside the box, so without the spacer it starts a
   # label's height above the fields either side of it.

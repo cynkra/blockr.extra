@@ -2,15 +2,16 @@
 
 ## Features
 
-- **The generated params band lays its fields out by kind.** It was a grid of
-  equal columns, which serves none of them: at a half-width dock panel four
-  tracks give a select 154px, where one tag plus the overflow chip is all that
-  fits, while the checkbox beside it wastes the same 154px. The band is now a
-  flex row where each field asks for the width its kind needs and takes a share
-  of what is left over, so a select gets 300px before anything wraps and a row
-  of knobs still fits on one line. Measured over ten plausible scripts it holds
-  one row wherever the grid did, and grows one only where a select needs the
-  room.
+- **The generated params band drops a column instead of squeezing a select.**
+  It keeps its equal tracks, so the fields stay aligned down the band and
+  across its rows; what changed is where the column count steps down. The old
+  ladder was built for a 150px track, right for a number or a flag and far too
+  tight for a select, so a half-width panel kept four columns and gave each
+  select 154px, where the overflow chip was all that fitted: four tidy boxes
+  saying nothing about what was selected. A band holding a select or a text now
+  steps at 220px, and adds a third and fourth column only once every column
+  would still be 330px. Measured on a nine-field band: 1768px is four columns
+  of 430, 703px two of 346, 453px two of 220.
 
 - **A checkbox lines up with the fields either side of it.** It labels itself
   beside the box, so it had no label row and started 23px above its neighbours.

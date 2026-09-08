@@ -167,38 +167,52 @@
 .function-block-params { margin-bottom: 8px; }
 
 /* --- The params band -------------------------------------------------------
- * A flex row, not a grid of equal columns. A script produces whatever mix of
- * controls it likes, and equal columns serve none of them: at a half-width
- * dock panel four tracks give a select 154px, where one tag plus the overflow
- * chip is all that fits, while the checkbox next to it wastes the same 154px.
+ * Equal tracks, so the fields line up down the band and across its rows, and a
+ * column count that steps down as the panel narrows. What changed is WHERE it
+ * steps: the old ladder was set by a 150px track, which is right for a number
+ * or a flag and far too tight for a select, so a half-width panel kept four
+ * columns and gave each select 154px, where the overflow chip is all that
+ * fits. Four tidy boxes saying nothing about what is selected.
  *
- * So each field asks for the width its kind needs (`flex-basis`) and takes a
- * share of what is left over (`flex-grow`), and the row wraps when the bases
- * no longer fit. Measured over ten plausible scripts, this holds one row where
- * the old grid held one, and only costs a row where a select genuinely needs
- * the room. The caps stop a band of knobs from stretching a number input
- * across a 1768px panel. */
+ * So the band picks its ladder from what it holds (fb_grid_track()). A band
+ * with a select or a text steps at a 220px track, which is two columns where
+ * the old grid insisted on four; a band of knobs keeps the 150px one. The
+ * counts are clamped per band (`--fb-cols*`), so a two-field band is never
+ * widened into a row with an empty trailing track. */
 .fb-params-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 12px;
+  grid-template-columns: repeat(var(--fb-cols, 4), minmax(0, 1fr));
 }
-.fb-params-grid > .block-input-wrapper {
-  flex: 1 1 160px;
-  max-width: 340px;
-  min-width: 0;
+
+/* Knobs only: a 150px track, so the steps are at 4 / 3 / 2 of one plus the
+ * 12px gaps. Unchanged from the old ladder, which was built for these. */
+@container (max-width: 636px) {
+  .fb-band--knobs { grid-template-columns: repeat(var(--fb-cols-3, 3), minmax(0, 1fr)); }
 }
-.fb-params-grid > .fb-field--select {
-  flex: 3 1 300px;
-  max-width: none;
+@container (max-width: 474px) {
+  .fb-band--knobs { grid-template-columns: repeat(var(--fb-cols-2, 2), minmax(0, 1fr)); }
 }
-.fb-params-grid > .fb-field--text {
-  flex: 2 1 220px;
-  max-width: 520px;
+@container (max-width: 312px) {
+  .fb-band--knobs { grid-template-columns: 1fr; }
 }
-.fb-params-grid > .fb-field--flag {
-  flex: 1 1 140px;
-  max-width: 260px;
+
+/* Anything holding tags or a sentence. Not one track width but a rising one: a
+ * third and a fourth column are added only once every column would still be
+ * 330px, so a wide panel spends its width on the controls before it spends it
+ * on columns. The two-column step is the exception, at 220px, because two
+ * narrow columns still read better than one wide one.
+ *
+ * Measured on a nine-field band: 1768px is four columns of 430, 1103px three
+ * of 359, 703px two of 346, 453px two of 220. */
+@container (max-width: 1356px) {
+  .fb-band--wide { grid-template-columns: repeat(var(--fb-cols-3, 3), minmax(0, 1fr)); }
+}
+@container (max-width: 1014px) {
+  .fb-band--wide { grid-template-columns: repeat(var(--fb-cols-2, 2), minmax(0, 1fr)); }
+}
+@container (max-width: 452px) {
+  .fb-band--wide { grid-template-columns: 1fr; }
 }
 
 /* A checkbox carries its label beside the box, so its field is a control with

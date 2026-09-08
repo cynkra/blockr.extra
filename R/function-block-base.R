@@ -348,8 +348,10 @@ output$dynamic_params <- shiny::renderUI({
     )
   })
 
+  band <- fb_grid_track(vapply(ui_elements, fb_field_kind, character(1L)))
   shiny::div(
-    class = "fb-params-grid",
+    class = paste("fb-params-grid", band$class),
+    style = band$style,
     ui_elements
   )
 })
@@ -395,6 +397,54 @@ list(
   r_version = r_version,
   get_param_values = get_param_values
 )
+}
+
+
+#' The kind a wrapped field declares
+#'
+#' The function block builds its fields one at a time and only then knows what
+#' the band holds, so the kind is read back off the wrapper rather than
+#' threaded through every branch.
+#'
+#' @param field A field built by [fb_field_wrapper()].
+#' @noRd
+fb_field_kind <- function(field) {
+  cls <- field$attribs$class
+  if (is.null(cls)) {
+    return(NA_character_)
+  }
+  hit <- regmatches(cls, regexpr("fb-field--[a-z]+", cls))
+  if (!length(hit)) NA_character_ else sub("fb-field--", "", hit)
+}
+
+
+#' Which ladder the band steps down, and its clamped column counts
+#'
+#' Equal tracks keep the fields aligned; what the band has to choose is where
+#' the column count steps down, and that depends on what it holds. A select
+#' needs room for its tags, a number or a flag does not, and a band with both
+#' should be laid out for the select: at a half-width panel that is two columns
+#' where the old ladder insisted on four and gave each select 154px.
+#'
+#' The counts are clamped to the number of fields for the same reason they
+#' always were: a two-field band widened into three tracks leaves an empty one.
+#'
+#' @param kinds The field kinds in the band.
+#' @return A list with the band's modifier class and its inline style.
+#' @noRd
+fb_grid_track <- function(kinds) {
+  n <- length(kinds)
+  list(
+    class = if (any(kinds %in% c("select", "text"))) {
+      "fb-band--wide"
+    } else {
+      "fb-band--knobs"
+    },
+    style = sprintf(
+      "--fb-cols:%d; --fb-cols-3:%d; --fb-cols-2:%d;",
+      min(n, 4L), min(n, 3L), min(n, 2L)
+    )
+  )
 }
 
 
