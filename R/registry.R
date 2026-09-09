@@ -15,7 +15,6 @@ register_extra_blocks <- function() {
       "new_broom_summary_block",
       "new_compare_block",
       "new_search_block",
-      "new_latest_block",
       "new_labeler_block"
     ),
     name = c(
@@ -26,7 +25,6 @@ register_extra_blocks <- function() {
       "Broom Summary",
       "Compare",
       "Search",
-      "Latest",
       "Labeler"
     ),
     description = c(
@@ -37,11 +35,9 @@ register_extra_blocks <- function() {
       "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
       "Compare two data frames on key columns and compute diff metrics on measurement columns.",
       "Filter rows by case-insensitive substring match across all columns.",
-      "Forward the value of whichever variadic input most recently changed (latest-wins merge / switch). Bridges multiple drill-down charts into one downstream block.",
       "Add or edit column labels (the `attr(col, \"label\")` attribute shown in column pickers and table headers). Empty label removes it."
     ),
     category = c(
-      "transform",
       "transform",
       "transform",
       "transform",
@@ -59,7 +55,6 @@ register_extra_blocks <- function() {
       "clipboard-data",
       "arrow-left-right",
       "search",
-      "shuffle",
       "tag"
     ),
     guidance = c(
@@ -112,8 +107,6 @@ register_extra_blocks <- function() {
       # new_compare_block:
       "",
       # new_search_block:
-      "",
-      # new_latest_block:
       "",
       # new_labeler_block:
       paste(
@@ -182,8 +175,6 @@ register_extra_blocks <- function() {
       # new_compare_block:
       NULL,
       # new_search_block:
-      NULL,
-      # new_latest_block:
       NULL,
       # new_labeler_block:
       # `labels` is an arbitrary-key map (column name -> label), which has
