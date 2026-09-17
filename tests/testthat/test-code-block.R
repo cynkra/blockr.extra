@@ -887,3 +887,29 @@ test_that("an external write of lines is collapsed into the script", {
     args = list(x = block, data = list(data = function() datasets::iris))
   )
 })
+
+test_that("an assignment whose right side folds away binds NULL", {
+
+  # `x <- if (FALSE) 1` is valid R that assigns NULL. Pruning the dropped
+  # branch with `e[[i]] <- NULL` removed the argument instead of setting it,
+  # leaving a one-argument `<-` that deparses as `x <- NULL` and throws
+  # `incorrect number of arguments to "<-"` when the block runs. The script
+  # was fine, so no edit to it could help.
+  out <- cb_fold(quote(x <- if (FALSE) 1))
+
+  expect_length(out, 3L)
+  expect_null(eval(out))
+  expect_equal(eval(quote(x), environment()), NULL)
+})
+
+test_that("a dropped argument elsewhere becomes NULL, not a missing argument", {
+
+  out <- cb_fold(quote(f(a, if (FALSE) b)))
+
+  expect_length(out, 3L)
+  expect_null(out[[3L]])
+
+  # The shapes that absorb a dropped operand keep doing so.
+  expect_equal(cb_fold(quote(p + if (FALSE) g())), quote(p))
+  expect_equal(cb_fold(quote(if (TRUE) 1 else 2)), 1)
+})

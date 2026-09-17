@@ -211,11 +211,18 @@ cb_prune <- function(e) {
       return(e[[3L]])
     }
   }
-  # Anywhere else a dropped branch really is NULL.
+  # Anywhere else a dropped branch really is NULL -- SET to NULL, which is
+  # `e[i] <- list(NULL)`. `e[[i]] <- NULL` deletes the element instead, the
+  # trap the comments in cb_subst() and cb_fold() already name. On an
+  # assignment that cost the whole right-hand side: `x <- if (FALSE) 1` became
+  # a one-argument `<-`, which DEPARSES as `x <- NULL` and throws
+  # `incorrect number of arguments to "<-"` when the block evaluates it. The
+  # script is valid R, nothing in the message or in the printed expression
+  # points at the line, and no edit to the script can fix it.
   if (length(e) > 1L) {
     for (i in 2L:length(e)) {
       if (!cb_is_empty_sym(e[[i]]) && is_drop(e[[i]])) {
-        e[[i]] <- NULL
+        e[i] <- list(NULL)
       }
     }
   }
