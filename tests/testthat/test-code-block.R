@@ -16,18 +16,18 @@ expr_for <- function(script, values = list(), data = iris) {
 
 test_that("a plain-value assignment is an input, anything else is code", {
   p <- cb_parse(paste(
-    'n <- 6',
+    "n <- 6",
     'label <- "total"',
-    'desc <- TRUE',
+    "desc <- TRUE",
     'when <- as.Date("2026-01-01")',
     'pick <- factor("a", c("a", "b"))',
     'keep <- c("a", "b")',
-    'neg <- -1',
-    'tmp <- data |> dplyr::filter(TRUE)',
-    'half <- nrow(data) / 2',
-    'twice <- 6L * 2',
-    'f <- function(x) x + 1',
-    'utils::head(tmp)',
+    "neg <- -1",
+    "tmp <- data |> dplyr::filter(TRUE)",
+    "half <- nrow(data) / 2",
+    "twice <- 6L * 2",
+    "f <- function(x) x + 1",
+    "utils::head(tmp)",
     sep = "\n"
   ))
 
@@ -99,7 +99,7 @@ test_that("a bare vector is the value, so the pool is that vector", {
 test_that("a declaration can read a helper line above it, lazily", {
   # The pipeline in between must NOT be evaluated to get there.
   script <- paste(
-    '.lv <- unique(data$Species)',
+    ".lv <- unique(data$Species)",
     '.boom <- stop("should never run")',
     'x <- factor("setosa", .lv)',
     sep = "\n"
@@ -125,13 +125,13 @@ test_that("a declaration that errors becomes a reported spec, not a crash", {
 # ---- annotations ----------------------------------------------------------
 
 test_that("the #| annotation carries what a value cannot say", {
-  expect_equal(cb_annotation('n <- 6  #| number(min = 1, max = 50)'),
+  expect_equal(cb_annotation("n <- 6  #| number(min = 1, max = 50)"),
                list(min = 1, max = 50))
-  expect_equal(cb_annotation('n <- 6  #| min = 1, max = 50'),
+  expect_equal(cb_annotation("n <- 6  #| min = 1, max = 50"),
                list(min = 1, max = 50))
   expect_equal(cb_annotation('n <- 6  #| label = "Rows"'), list(label = "Rows"))
-  expect_equal(cb_annotation('n <- 6'), list())
-  expect_equal(cb_annotation('n <- 6  #| nonsense ='), list())
+  expect_equal(cb_annotation("n <- 6"), list())
+  expect_equal(cb_annotation("n <- 6  #| nonsense ="), list())
 })
 
 test_that("annotation values reach the spec", {
@@ -155,7 +155,7 @@ test_that("values are spliced in as literals and the data slot is used", {
 test_that("the expression carries no assignment, so no local() wrapper", {
   # This is the whole point: blockr.code wraps in local() when it finds an
   # assignment, which is what made the function block's export unreadable.
-  e <- expr_for('n <- 6\n\nutils::head(data, n)')
+  e <- expr_for("n <- 6\n\nutils::head(data, n)")
   expect_equal(e, bquote(utils::head(.(data_slot()), 6)))
   expect_false(any(all.names(e) %in% c("<-", "=", "function")))
 })
@@ -173,15 +173,15 @@ test_that("live values override the declaration's defaults", {
 })
 
 test_that("the expression evaluates to the same thing the script means", {
-  e <- expr_for('n <- 3\n\nutils::head(data, n)')
+  e <- expr_for("n <- 3\n\nutils::head(data, n)")
   expect_equal(eval_bquoted(e, iris), utils::head(iris, 3))
 })
 
 test_that("a checkbox folds its branch away", {
   script <- paste(
-    'desc <- TRUE',
-    '',
-    'dplyr::arrange(data, if (desc) dplyr::desc(Sepal.Length) else Sepal.Length)',
+    "desc <- TRUE",
+    "",
+    "dplyr::arrange(data, if (desc) dplyr::desc(Sepal.Length) else Sepal.Length)",
     sep = "\n"
   )
   expect_equal(
@@ -196,9 +196,9 @@ test_that("a checkbox folds its branch away", {
 
 test_that("an else-less branch is dropped from a + chain, not left as NULL", {
   script <- paste(
-    'trend <- TRUE',
-    '',
-    'ggplot2::ggplot(data) + ggplot2::geom_point() + if (trend) ggplot2::geom_smooth()',
+    "trend <- TRUE",
+    "",
+    "ggplot2::ggplot(data) + ggplot2::geom_point() + if (trend) ggplot2::geom_smooth()",
     sep = "\n"
   )
   on_expr <- expr_for(script, values = list(trend = TRUE))
@@ -225,7 +225,7 @@ test_that("a Date is emitted as as.Date(), not as a structure() blob", {
 test_that("only value positions are substituted", {
   # `n` as an argument NAME and as the head of dplyr::n() must survive; only
   # the value reference is replaced.
-  e <- expr_for('n <- 6\n\ndplyr::summarise(data, n = dplyr::n(), k = n)')
+  e <- expr_for("n <- 6\n\ndplyr::summarise(data, n = dplyr::n(), k = n)")
   expect_equal(
     e,
     bquote(dplyr::summarise(.(data_slot()), n = dplyr::n(), k = 6))
@@ -233,7 +233,7 @@ test_that("only value positions are substituted", {
 })
 
 test_that("a name the body assigns stays code and offers no control", {
-  script <- 'n <- 6\n\nn <- nrow(data)\nutils::head(data, n)'
+  script <- "n <- 6\n\nn <- nrow(data)\nutils::head(data, n)"
   p <- cb_parse(script)
   expect_equal(cb_shadowed(p), "n")
 
@@ -247,11 +247,11 @@ test_that("a name the body assigns stays code and offers no control", {
 test_that("a dotted name is scaffolding, whatever it holds", {
   script <- paste(
     '.keep <- c("Sepal.Length", "Nope")',
-    '.keep <- intersect(.keep, names(data))',
-    '',
-    'col <- factor(.keep, levels = .keep)',
-    '',
-    'data[, as.character(col), drop = FALSE]',
+    ".keep <- intersect(.keep, names(data))",
+    "",
+    "col <- factor(.keep, levels = .keep)",
+    "",
+    "data[, as.character(col), drop = FALSE]",
     sep = "\n"
   )
   p <- cb_parse(script)
@@ -270,10 +270,10 @@ test_that("a dotted name is scaffolding, whatever it holds", {
 
 test_that("a dotted name is never a control, whatever it is assigned", {
   script <- paste(
-    '.n <- 6',
+    ".n <- 6",
     '.pick <- factor("setosa", unique(data$Species))',
     'label <- "total"',
-    'utils::head(data, .n)',
+    "utils::head(data, .n)",
     sep = "\n"
   )
   expect_equal(vapply(specs_for(script), `[[`, character(1L), "name"), "label")
@@ -290,16 +290,16 @@ test_that("controls can sit below a preamble that derives from the data", {
   # under it. Position does not decide anything: the declarations are the
   # factor lines, wherever they are.
   script <- paste(
-    'group_var <- names(data)[[5L]]',
-    'if (!group_var %in% names(data)) {',
-    '  group_var <- names(data)[[1L]]',
-    '}',
-    'group_levels <- sort(unique(as.character(data[[group_var]])))',
-    '',
+    "group_var <- names(data)[[5L]]",
+    "if (!group_var %in% names(data)) {",
+    "  group_var <- names(data)[[1L]]",
+    "}",
+    "group_levels <- sort(unique(as.character(data[[group_var]])))",
+    "",
     'stats <- factor("n", levels = c("n", "mean"))',
-    '`Pool members` <- factor(character(0), levels = group_levels)',
-    '',
-    'data[data[[group_var]] %in% as.character(`Pool members`), , drop = FALSE]',
+    "`Pool members` <- factor(character(0), levels = group_levels)",
+    "",
+    "data[data[[group_var]] %in% as.character(`Pool members`), , drop = FALSE]",
     sep = "\n"
   )
   s <- specs_for(script)
@@ -315,11 +315,11 @@ test_that("a preamble statement a declaration depends on is run", {
   # applies and the control comes back as an error.
   script <- paste(
     'group_var <- "NOPE"',
-    'if (!group_var %in% names(data)) {',
+    "if (!group_var %in% names(data)) {",
     '  group_var <- "Species"',
-    '}',
-    'pick <- factor(character(0), levels = unique(data[[group_var]]))',
-    'data[data$Species %in% as.character(pick), ]',
+    "}",
+    "pick <- factor(character(0), levels = unique(data[[group_var]]))",
+    "data[data$Species %in% as.character(pick), ]",
     sep = "\n"
   )
   s <- specs_for(script)
@@ -336,8 +336,8 @@ test_that("a choice list the data decides is a factor over a private helper", {
   # it starts with a dot; the factor is the control.
   script <- paste(
     '.vars <- intersect(names(data), c("Species", "Petal.Width", "NOPE"))',
-    'vars <- factor(.vars, levels = .vars)',
-    'data[, as.character(vars), drop = FALSE]',
+    "vars <- factor(.vars, levels = .vars)",
+    "data[, as.character(vars), drop = FALSE]",
     sep = "\n"
   )
   s <- specs_for(script)
@@ -369,9 +369,9 @@ test_that("a call that is not on the value list is an ordinary line", {
 
 test_that("a dotted helper gets no control and no band", {
   script <- paste(
-    '.lv <- unique(data$Species)',
+    ".lv <- unique(data$Species)",
     'pick <- factor("setosa", .lv)',
-    'data[data$Species == pick, ]',
+    "data[data$Species == pick, ]",
     sep = "\n"
   )
   s <- specs_for(script)
@@ -383,9 +383,9 @@ test_that("a dotted helper gets no control and no band", {
 
 test_that("a name declared twice keeps only the last control", {
   script <- paste(
-    'n <- 6',
-    'n <- 10',
-    'utils::head(data, n)',
+    "n <- 6",
+    "n <- 10",
+    "utils::head(data, n)",
     sep = "\n"
   )
   p <- cb_parse(script)
@@ -406,24 +406,24 @@ test_that("an assignment target is not substituted, but its index is", {
 })
 
 test_that("multiple body statements are wrapped in a single braced expression", {
-  e <- expr_for('n <- 2\n\ntmp <- utils::head(data, n)\nnrow(tmp)')
+  e <- expr_for("n <- 2\n\ntmp <- utils::head(data, n)\nnrow(tmp)")
   expect_identical(e[[1L]], quote(`{`))
   expect_equal(eval_bquoted(e, iris), 2L)
 })
 
 test_that("a script with no body yields no expression", {
-  expect_null(expr_for('n <- 6'))
+  expect_null(expr_for("n <- 6"))
 })
 
 
 # ---- coercion -------------------------------------------------------------
 
 test_that("values coming back from widgets are coerced by the declaration", {
-  num <- specs_for('n <- 6')[[1L]]
+  num <- specs_for("n <- 6")[[1L]]
   expect_equal(cb_coerce("12", num), 12)
   expect_null(cb_coerce("NA", num))
 
-  flag <- specs_for('x <- TRUE')[[1L]]
+  flag <- specs_for("x <- TRUE")[[1L]]
   expect_identical(cb_coerce("FALSE", flag), FALSE)
 
   sel <- specs_for('x <- factor(c("a", "b"), c("a", "b", "c"))')[[1L]]
@@ -468,7 +468,7 @@ test_that("new_code_block creates a valid block", {
 })
 
 test_that("the block's expression and state come out of the script", {
-  script <- 'n <- 3\n\nutils::head(data, n)'
+  script <- "n <- 3\n\nutils::head(data, n)"
   block <- new_code_block(script = script)
   testServer(
     blockr.core::get_s3_method("block_server", block),
@@ -485,7 +485,7 @@ test_that("the block's expression and state come out of the script", {
 })
 
 test_that("knob positions are part of the state, so a board restores them", {
-  script <- 'n <- 3\n\nutils::head(data, n)'
+  script <- "n <- 3\n\nutils::head(data, n)"
   block <- new_code_block(script = script, values = list(n = 7))
   testServer(
     blockr.core::get_s3_method("block_server", block),
@@ -505,7 +505,7 @@ test_that("an external write of the script re-derives the expression", {
   # The path blockr.ai's external_ctrl takes. `session$setInputs` does not
   # reach the block's inner module namespace in testServer, so drive the state
   # reactive directly -- which is what an external write does anyway.
-  block <- new_code_block(script = 'n <- 3\n\nutils::head(data, n)')
+  block <- new_code_block(script = "n <- 3\n\nutils::head(data, n)")
   testServer(
     blockr.core::get_s3_method("block_server", block),
     {
@@ -515,7 +515,7 @@ test_that("an external write of the script re-derives the expression", {
         bquote(utils::head(.(data_slot()), 3))
       )
 
-      session$returned$state$script('n <- 5\n\nutils::head(data, n)')
+      session$returned$state$script("n <- 5\n\nutils::head(data, n)")
       session$flushReact()
       expect_equal(
         session$returned$expr(),
@@ -523,7 +523,7 @@ test_that("an external write of the script re-derives the expression", {
       )
 
       # A declaration that disappears takes its stored value with it.
-      session$returned$state$script('utils::head(data, 2)')
+      session$returned$state$script("utils::head(data, 2)")
       session$flushReact()
       expect_equal(
         session$returned$expr(),
@@ -552,10 +552,10 @@ test_that("the block evaluates end to end through blockr", {
 })
 
 test_that("the footer says how many controls the script produced", {
-  p <- cb_parse('n <- 6\n\nutils::head(data, n)')
+  p <- cb_parse("n <- 6\n\nutils::head(data, n)")
   expect_match(cb_rest_label(cb_specs(p, iris), p), "^1 input ")
 
-  p0 <- cb_parse('utils::head(data)')
+  p0 <- cb_parse("utils::head(data)")
   expect_match(cb_rest_label(cb_specs(p0, iris), p0), "^no inputs")
 })
 
@@ -569,9 +569,9 @@ test_that("a declaration that reads the data survives the data going away", {
   # defines. Coming back restored the good expression, so the block re-evaluated
   # on every tab switch.
   script <- paste(
-    'pick <- factor(data$Species[1], levels(data$Species))',
-    '',
-    'subset(data, Species == pick)',
+    "pick <- factor(data$Species[1], levels(data$Species))",
+    "",
+    "subset(data, Species == pick)",
     sep = "\n"
   )
   block <- new_code_block(script = script)
@@ -609,7 +609,7 @@ test_that("a declaration that reads the data survives the data going away", {
 test_that("specs are kept, not degraded, when the data is unavailable", {
   # The unit the fix turns on: cb_specs() against NULL yields an error spec, so
   # the block must hold the last good one instead of adopting it.
-  script <- 'pick <- factor(data$Species[1], levels(data$Species))\n\nsubset(data, Species == pick)'
+  script <- "pick <- factor(data$Species[1], levels(data$Species))\n\nsubset(data, Species == pick)"
   p <- cb_parse(script)
 
   good <- cb_specs(p, datasets::iris)

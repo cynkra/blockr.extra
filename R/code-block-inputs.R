@@ -583,7 +583,7 @@ cb_mark_title <- function(s) {
   switch(
     s$kind,
     select = sprintf(
-      "%s-select · %d choice%s",
+      "%s-select \u00b7 %d choice%s",
       if (isTRUE(s$multiple)) "multi" else "single",
       length(s$choices), if (length(s$choices) == 1L) "" else "s"
     ),

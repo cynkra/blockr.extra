@@ -338,10 +338,10 @@ cb_rest_label <- function(specs, parsed) {
   }
   n <- length(specs)
   if (!n) {
-    return("no inputs · assign a plain value to get a control")
+    return("no inputs \u00b7 assign a plain value to get a control")
   }
   sprintf(
-    "%d input%s · lines assigning a plain value become controls, .name stays private",
+    "%d input%s \u00b7 lines assigning a plain value become controls, .name stays private",
     n, if (n == 1L) "" else "s"
   )
 }
