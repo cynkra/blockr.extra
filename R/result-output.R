@@ -5,7 +5,7 @@
 #' draws whatever its code returned, so the thing worth dispatching on is the
 #' RESULT: a data frame, a gt table, a ggplot, a composer table.
 #'
-#' The default method is [render_dynamic_output()], the type switch this
+#' The default method is `render_dynamic_output()`, the type switch this
 #' package has always used, so adding this generic changes nothing on its
 #' own. It exists so another package can teach a function block to draw its
 #' own object without that object's renderer having to live here -- and,
