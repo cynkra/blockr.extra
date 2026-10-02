@@ -9,7 +9,7 @@ name: ci
 
 jobs:
   ci:
-    uses: BristolMyersSquibb/blockr.ci/.github/workflows/ci.yaml@main
+    uses: BristolMyersSquibb/blockr.ci/.github/workflows/ci.yaml@v0.1.1
     with:
       # override_blockr_methods() in R/zzz.R deliberately monkey-patches
       # blockr.core's S3 methods via unlockBinding() -- that's the
