@@ -37,5 +37,5 @@ Remotes:
     BristolMyersSquibb/blockr.core,
     BristolMyersSquibb/blockr.dock,
     BristolMyersSquibb/blockr.dplyr,
-    BristolMyersSquibb/blockr.ui
+    BristolMyersSquibb/blockr.ui@feat/no-font-awesome
 Config/testthat/edition: 3

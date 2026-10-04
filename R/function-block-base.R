@@ -318,7 +318,7 @@ output$error_display <- shiny::renderUI({
   if (!is.null(err)) {
     shiny::div(
       class = "function-block-error",
-      shiny::icon("exclamation-triangle"),
+      blockr.ui::small_icon("warning"),
       " ",
       err
     )

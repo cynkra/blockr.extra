@@ -2,6 +2,10 @@
 
 ## Features
 
+- **The function blocks' status icons come from blockr.ui.** The warning and
+  info marks are `blockr.ui::small_icon()` in place of Font Awesome's, so
+  these blocks no longer load it (BristolMyersSquibb/blockr.ui#85).
+
 - **The generated params band drops a column instead of squeezing a select.**
   It keeps its equal tracks, so the fields stay aligned down the band and
   across its rows; what changed is where the column count steps down. The old
