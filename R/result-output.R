@@ -39,3 +39,29 @@ block_result_output <- function(result, block, session, ...) {
 block_result_output.default <- function(result, block, session, ...) {
   render_dynamic_output(result, block, session)
 }
+
+# A composer table is counts, and a drill on it has to find the subjects behind
+# a count. The frame this block received is where they are, after every step
+# above the block (a flag filter, a group filter), so it rides along as
+# `source_data`, the attribute the composer drill resolves a click against
+# (blockr.sandbox `composer_drill_claims()`, blockr.viz `drill_source()`).
+# A script that stamped its own, narrower frame keeps it. The block's code is
+# untouched: this happens to the result, not the expression.
+stamp_source_data <- function(res, env) {
+  if (!inherits(res, "composed")) {
+    return(res)
+  }
+  if (!is.null(attr(res, "source_data", exact = TRUE)) ||
+        !is.null(res[["source_data"]])) {
+    return(res)
+  }
+  data <- if (is.environment(env)) {
+    get0("data", envir = env, inherits = FALSE)
+  } else {
+    env[["data"]]
+  }
+  if (is.data.frame(data)) {
+    attr(res, "source_data") <- data
+  }
+  res
+}

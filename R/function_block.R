@@ -116,7 +116,7 @@ new_function_block <- function(
 
 #' @export
 block_eval.function_block <- function(x, expr, env, ...) {
-  eval_with_plot_capture(expr, env)
+  stamp_source_data(eval_with_plot_capture(expr, env), env)
 }
 
 #' @export

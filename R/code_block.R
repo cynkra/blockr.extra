@@ -405,7 +405,7 @@ blockr_ser.code_block <- function(x, state = NULL, ...) {
 
 #' @export
 block_eval.code_block <- function(x, expr, env, ...) {
-  eval_with_plot_capture(expr, env)
+  stamp_source_data(eval_with_plot_capture(expr, env), env)
 }
 
 #' @export
