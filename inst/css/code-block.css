@@ -261,16 +261,16 @@
   width: 100%;
 }
 
-/* Field label — 13px / medium / secondary, consistent across select and
- * text/number/checkbox fields. */
+/* Field label, as blockr.ui's .blockr-label: 12px, regular, muted, 4px
+ * above the control, the same for select and text/number/checkbox fields. */
 .function-block-params .fb-field-label,
 .function-block-params .block-input-wrapper label.control-label,
 .function-block-params .block-input-wrapper .shiny-input-container > label {
   display: block;
-  font-weight: 500;
-  font-size: var(--blockr-font-size-sm, 0.8125rem);
-  color: var(--blockr-color-text-secondary, #6b7280);
-  margin-bottom: 5px;
+  font-weight: var(--blockr-font-weight-normal);
+  font-size: var(--blockr-font-size-xs);
+  color: var(--blockr-color-text-muted);
+  margin-bottom: 4px;
 }
 
 /* Text / number inputs → the shared bordered 42px control.
@@ -282,9 +282,9 @@
   height: 42px;
   padding: 8px 12px;
   font-size: var(--blockr-font-size-base, 0.875rem);
-  color: var(--blockr-color-text-primary, #111827);
-  background-color: var(--blockr-color-bg-input, #f9fafb);
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  color: var(--blockr-color-text-default);
+  background-color: var(--blockr-color-bg-field);
+  border: 1px solid var(--blockr-color-border-default);
   border-radius: 8px;
   box-shadow: none;
   box-sizing: border-box;
@@ -292,9 +292,9 @@
 }
 .function-block-params .block-input-wrapper .form-control:focus {
   outline: none;
-  background-color: #ffffff;
-  border-color: var(--blockr-color-primary, #2563eb);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background-color: var(--blockr-color-bg-surface);
+  border-color: var(--blockr-color-border-accent);
+  box-shadow: var(--blockr-focus-ring);
 }
 .function-block-params .block-input-wrapper .form-control::placeholder {
   color: var(--blockr-grey-400, #9ca3af);
@@ -304,8 +304,8 @@
 .function-block-params .block-input-wrapper .checkbox label,
 .function-block-params .block-input-wrapper .shiny-input-container .checkbox label {
   font-weight: 400;
-  font-size: var(--blockr-font-size-base, 0.875rem);
-  color: var(--blockr-color-text-primary, #111827);
+  font-size: var(--blockr-font-size-base);
+  color: var(--blockr-color-text-default);
   margin-bottom: 0;
 }
 
