@@ -267,13 +267,20 @@ setup_code_editor_server <- function(input, output, session, base,
       } else {
         code_block_footer(
           "Pending edits",
-          # Surface the Mod-Enter shortcut: a muted return glyph on the button,
-          # full "Cmd/Ctrl + Enter" on hover. Only on the enabled Run — the
-          # disabled error-state buttons stay plain since the shortcut is gated
-          # on the code parsing.
+          # Surface the Mod-Enter shortcut on the button: Cmd+Enter on a Mac,
+          # Ctrl+Enter elsewhere. The page decides which one shows
+          # (gear-editor.js marks a Mac). Only on the enabled Run: the
+          # disabled error-state buttons stay plain since the shortcut is
+          # gated on the code parsing.
           shiny::actionButton(
             ns("submit_fn"),
-            shiny::tagList("Run", shiny::span(class = "blockr-code-kbd", "\u21B5")),
+            shiny::tagList(
+              "Run",
+              shiny::span(class = "blockr-code-kbd blockr-code-kbd--mac",
+                          "\u2318\u21B5"),
+              shiny::span(class = "blockr-code-kbd blockr-code-kbd--pc",
+                          "Ctrl \u21B5")
+            ),
             class = "blockr-code-btn blockr-code-btn--run",
             title = "Run (\u2318/Ctrl + Enter)"
           )
@@ -358,46 +365,53 @@ gear_svg <- function() {
 
 #' Gear-toggled inline editor section (the authoring surface behind the gear).
 #'
-#' The standard ecosystem gear button toggles an inline `.blockr-gear-section`
-#' holding the editor (and any `top` UI above it — e.g. a template picker).
-#' Opening expands it in normal flow and pushes the content below it *down*
-#' (not a popover overlay); the gear stays `.blockr-gear-active` (coloured)
-#' while open. Styling is self-contained in code-block.css.
+#' The standard gear button opens the editor (and any `top` UI above it, e.g. a
+#' template picker) in the design system's gear tray: `.blockr-settings`,
+#' driven by `Blockr.gearTray()` from blockr.ui. When the block is wide, the
+#' open tray moves beside the output instead of above it (gear-editor.js).
 #'
 #' @param ns Namespace function.
 #' @param fn_text Initial function code.
 #' @param top Optional UI rendered above the editor inside the section.
 #' @param label Editor field label.
 #' @param marks Initial input-line marks, passed through to [code_editor_ui()].
+#' @param side_with Id of the element the open tray sits beside when the block
+#'   is wide. The default is blockr.core's output for the block,
+#'   `NS(<block id>, "result")`.
 #' @return A Shiny tag.
 #' @noRd
 gear_editor_ui <- function(ns, fn_text, top = NULL, label = "Function code",
-                           marks = NULL) {
+                           marks = NULL,
+                           side_with = sub("-expr-$", "-result", ns(""))) {
   sec_id <- ns("fn-editor")
-  btn_id <- ns("fn-gear-btn")
+  tray <- shiny::div(
+    id = sec_id,
+    class = "blockr-settings blockr-settings--beak blockr-gear-section",
+    `aria-label` = label,
+    `data-side-with` = side_with,
+    `data-code` = ns("fn_code"),
+    top,
+    code_editor_ui(ns, fn_text, label = label, marks = marks)
+  )
+  # On the tray, which the composer lifts out of this wrapper.
+  tray <- htmltools::attachDependencies(
+    tray,
+    c(htmltools::findDependencies(blockr.ui::controls_dep()),
+      list(gear_editor_dep()))
+  )
   shiny::div(
     class = "blockr-gear-editor",
     shiny::div(
       class = "blockr-gear-header",
       shiny::tags$button(
-        id = btn_id,
+        id = ns("fn-gear-btn"),
         type = "button",
         class = "blockr-gear-btn",
-        title = "Edit function",
-        onclick = sprintf(
-          "(function(){var s=document.getElementById('%s');var b=document.getElementById('%s');var open=s.style.display!=='none';s.style.display=open?'none':'block';b.classList.toggle('blockr-gear-active',!open);if(!open){%s}})();",
-          sec_id, btn_id, code_editor_refresh_js(ns("fn_code"))
-        ),
+        `data-tray` = sec_id,
         htmltools::HTML(gear_svg())
       )
     ),
-    shiny::div(
-      id = sec_id,
-      class = "blockr-gear-section",
-      style = "display: none;",
-      top,
-      code_editor_ui(ns, fn_text, label = label, marks = marks)
-    )
+    tray
   )
 }
 
@@ -412,19 +426,3 @@ code_block_footer <- function(label, ...) {
   )
 }
 
-
-#' JS to re-measure a hidden CodeMirror editor when its container is revealed.
-#'
-#' CodeMirror mis-measures when mounted inside a `display:none` / collapsed
-#' container; call this on the reveal toggle so it lays out correctly.
-#'
-#' @param fn_code_id The namespaced id of the `.blockr-code` mount
-#'   (i.e. `ns("fn_code")`).
-#' @return A JS expression string.
-#' @noRd
-code_editor_refresh_js <- function(fn_code_id) {
-  sprintf(
-    "if (window.Blockr && window.Blockr.Code) { setTimeout(function(){ window.Blockr.Code.refresh('%s'); }, 50); }",
-    fn_code_id
-  )
-}

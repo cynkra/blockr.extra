@@ -139,13 +139,16 @@
   border: 1px solid #c3d6fb;
 }
 .blockr-code-footer .blockr-code-btn--run:hover { background: #dce8fc; }
-/* Muted return-glyph keyboard hint on the Run button (full shortcut on hover
- * via the button's title). */
+/* Muted keyboard hint on the Run button: Cmd+Enter on a Mac (html.blockr-mac,
+ * set by gear-editor.js), Ctrl+Enter elsewhere. */
 .blockr-code-footer .blockr-code-kbd {
   margin-left: 5px;
   opacity: 0.55;
   font-size: 0.95em;
 }
+.blockr-code-footer .blockr-code-kbd--mac,
+.blockr-mac .blockr-code-footer .blockr-code-kbd--pc { display: none; }
+.blockr-mac .blockr-code-footer .blockr-code-kbd--mac { display: inline; }
 /* Disabled Run = pending edit has a syntax error: can't be run. */
 .blockr-code-footer .blockr-code-btn--run:disabled,
 .blockr-code-footer .blockr-code-btn--run[disabled] {
@@ -306,38 +309,90 @@
   margin-bottom: 0;
 }
 
-/* --- Gear-toggled inline editor section (authoring surface) ---
- * The standard gear button (mirrors blockr.dplyr's `.blockr-gear-btn`) toggles
- * an in-flow section that pushes the content below it down. */
-.blockr-gear-editor { width: 100%; }
-.blockr-gear-header {
-  display: flex; align-items: center; justify-content: flex-end;
-  margin-bottom: 6px;
+/* CodeMirror's search bar (Mod-f in the editor), on the design system's
+ * controls: 26px fields and secondary buttons, 12px labels. Three classes deep
+ * to beat CodeMirror's injected theme. The match colours stay CodeMirror's. */
+.blockr-code .cm-panels.cm-panels-top {
+  background: var(--blockr-color-bg-subtle, #f9fafb);
+  border-bottom: 1px solid var(--blockr-color-border, #e5e7eb);
+  color: var(--blockr-color-text-default, #111827);
 }
-.blockr-gear-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; flex-shrink: 0;
-  color: var(--blockr-grey-400, #9ca3af);
-  background: transparent;
+.blockr-code .cm-panel.cm-search {
+  padding: 8px 10px;
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+}
+.blockr-code .cm-panel.cm-search .cm-textfield {
+  height: 26px;
+  margin: 2px 4px 2px 0;
+  padding: 0 8px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 12.5px;
+  background: var(--blockr-color-bg-surface, #fff);
   border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 4px; cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  border-radius: var(--blockr-radius-sm, 4px);
+  vertical-align: middle;
 }
-.blockr-gear-btn:hover {
-  color: var(--blockr-color-primary, #2563eb);
-  border-color: rgba(37, 99, 235, 0.3);
-  background: rgba(37, 99, 235, 0.04);
+.blockr-code .cm-panel.cm-search .cm-textfield:focus {
+  outline: none;
+  border-color: var(--blockr-color-border-accent, #2563eb);
 }
-.blockr-gear-btn.blockr-gear-active {
-  color: var(--blockr-color-primary, #2563eb);
-  border-color: rgba(37, 99, 235, 0.3);
-  background: rgba(37, 99, 235, 0.08);
+.blockr-code .cm-panel.cm-search .cm-button {
+  height: 26px;
+  margin: 2px 4px 2px 0;
+  padding: 0 10px;
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-color-text-default, #111827);
+  background: var(--blockr-color-bg-surface, #fff);
+  background-image: none;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: var(--blockr-radius-sm, 4px);
+  vertical-align: middle;
 }
-.blockr-gear-section { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
-/* In the gear panel there's more room, so allow a taller floor; both share
+.blockr-code .cm-panel.cm-search .cm-button:hover {
+  background: var(--blockr-color-bg-hover, #f3f4f6);
+}
+.blockr-code .cm-panel.cm-search label {
+  margin-right: 10px;
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-color-text-muted, #6b7280);
+  vertical-align: middle;
+}
+.blockr-code .cm-panel.cm-search input[type="checkbox"] {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+.blockr-code .cm-panel.cm-search button[name="close"] {
+  top: 6px;
+  right: 8px;
+  font-size: 16px;
+  color: var(--blockr-color-text-muted, #6b7280);
+}
+
+/* --- The editor behind the gear (gear_editor_ui()) ---
+ * The gear button and the tray (.blockr-settings) are blockr.ui's. The
+ * editor is a field in the tray, so it sits on the surface colour. */
+.blockr-gear-editor { width: 100%; }
+.blockr-gear-section .blockr-code-frame {
+  background: var(--blockr-color-bg-surface, #fff);
+}
+.blockr-gear-section .blockr-code-block:last-child { margin-bottom: 0; }
+/* In the tray there's more room, so allow a taller floor; both share
  * the same ~25-row cap (25 * 20.625px line + 12px content padding) before the
  * editor starts scrolling internally. */
 .blockr-gear-section .blockr-code .cm-editor { min-height: 180px; max-height: 528px; }
+
+/* Beside the output (gear-editor.js): on a wide block the open tray's branch
+ * takes the right column and the output stacks in the left one. What comes
+ * before the branch (a header row) keeps the full width. */
+.blockr-gear-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 42%);
+  column-gap: 16px;
+  align-items: start;
+}
+.blockr-gear-side > * { grid-column: 1 / -1; min-width: 0; }
+.blockr-gear-side > .blockr-gear-side__main { grid-column: 1; }
+.blockr-gear-side > .blockr-gear-side__tray { grid-column: 2; }
 
 /* ---- code block: input lines -------------------------------------------
  * A top-level assignment of a plain value becomes a control on the card. The

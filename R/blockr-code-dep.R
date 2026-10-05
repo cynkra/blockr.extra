@@ -25,3 +25,14 @@ code_block_css_dep <- memoise0(function() {
     stylesheet = "code-block.css"
   )
 })
+
+#' @rdname blockr_code_dep
+#' @keywords internal
+gear_editor_dep <- memoise0(function() {
+  htmltools::htmlDependency(
+    name = "blockr-gear-editor",
+    version = as.character(utils::packageVersion("blockr.extra")),
+    src = system.file("js", package = "blockr.extra"),
+    script = "gear-editor.js"
+  )
+})
