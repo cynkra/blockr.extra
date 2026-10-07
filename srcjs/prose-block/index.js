@@ -131,6 +131,17 @@ class ProseBlock {
     });
     // before the editor's own keys
     this.editorHost.addEventListener("keydown", (ev) => this._edge(ev), true);
+    // a link pasted over words links them
+    this.editorHost.addEventListener("paste", (ev) => {
+      const view = this._view();
+      const url = ((ev.clipboardData && ev.clipboardData.getData("text/plain")) || "").trim();
+      if (!view || view.state.selection.empty || !/^(https?:\/\/|mailto:)\S+$/i.test(url)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const { from, to } = view.state.selection;
+      const link = view.state.schema.marks.link;
+      view.dispatch(view.state.tr.addMark(from, to, link.create({ href: url })));
+    }, true);
   }
 
   // ---- edges: the host's passage to the next text ----------------------------
@@ -141,6 +152,11 @@ class ProseBlock {
   }
 
   _edge(ev) {
+    if ((ev.metaKey || ev.ctrlKey) && !ev.shiftKey && !ev.altKey && ev.key.toLowerCase() === "k") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return this._linkField();
+    }
     if (ev.key === "/") return this._slash(ev);
     if (ev.key === "@") return this._at(ev);
     if (this.field || ev.defaultPrevented || ev.shiftKey || ev.altKey || ev.metaKey || ev.ctrlKey || ev.isComposing) return;
@@ -170,6 +186,69 @@ class ProseBlock {
       ev.preventDefault();
       ev.stopPropagation();
     }
+  }
+
+  // ---- links: Cmd/Ctrl+K -------------------------------------------------------
+  //
+  // On selected words, a small field for the address; in a link, the same
+  // field with its address, and an empty address takes the link off.
+
+  _linkRange(st) {
+    const link = st.schema.marks.link;
+    let { from, to } = st.selection;
+    if (from !== to) return { from, to, href: (link.isInSet(st.doc.resolve(from + 1).marks()) || {}).attrs?.href || "" };
+    const $p = st.doc.resolve(from), start = $p.start();
+    let range = null;
+    $p.parent.forEach((node, offset) => {
+      const a = start + offset, b = a + node.nodeSize, m = link.isInSet(node.marks);
+      if (m && a <= from && from <= b) {
+        if (!range) range = { from: a, to: b, href: m.attrs.href };
+        else if (a === range.to) range.to = b;
+      }
+    });
+    return range;
+  }
+
+  _linkField() {
+    const view = this._view();
+    if (!view) return;
+    const range = this._linkRange(view.state);
+    if (!range) return;
+    this._closeLink();
+    const box = document.createElement("div");
+    box.className = "blockr-prose-link";
+    box.innerHTML = '<span class="blockr-input"><input type="url" class="blockr-input__field" placeholder="Paste a link" aria-label="Link"></span>';
+    const input = box.querySelector("input");
+    input.value = range.href || "";
+    document.body.appendChild(box);
+    const r = view.coordsAtPos(range.from);
+    box.style.left = Math.max(8, r.left) + "px";
+    box.style.top = (r.bottom + 6) + "px";
+    this._link = box;
+    const done = (apply) => {
+      if (this._link !== box) return;
+      this._closeLink();
+      if (apply) {
+        const href = input.value.trim();
+        const link = view.state.schema.marks.link;
+        let tr = view.state.tr.removeMark(range.from, range.to, link);
+        if (href) tr = tr.addMark(range.from, range.to, link.create({ href: /^[a-z]+:/i.test(href) ? href : "https://" + href }));
+        view.dispatch(tr);
+      }
+      view.focus();
+    };
+    input.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") { e.preventDefault(); done(true); }
+      if (e.key === "Escape") { e.preventDefault(); done(false); }
+    });
+    input.addEventListener("blur", () => setTimeout(() => done(false), 0));
+    input.focus();
+    input.select();
+  }
+
+  _closeLink() {
+    if (this._link) { const b = this._link; this._link = null; b.remove(); }
   }
 
   // "/" on an empty line of its own, not in a list or a quote
