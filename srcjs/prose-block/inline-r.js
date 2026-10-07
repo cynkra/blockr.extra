@@ -31,7 +31,11 @@ export const inlineRNode = $node("inline_r", () => ({
   // The chip shows its code until a value arrives (dormant).
   toDOM: (node) => [
     "span",
-    { "data-r": node.attrs.expr || "", class: "blockr-r-chip is-dormant" },
+    {
+      "data-r": node.attrs.expr || "",
+      "data-blockr-tooltip": "r " + (node.attrs.expr || ""),
+      class: "blockr-r-chip is-dormant",
+    },
     node.attrs.expr || "",
   ],
   parseMarkdown: {

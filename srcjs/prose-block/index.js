@@ -24,14 +24,7 @@ import { inlineRNode, inlineRRemark, inlineRPlugin, collectExprs } from "./inlin
 const instances = new Map(); // el.id -> ProseBlock
 
 // A few calls that come up in sentences, offered under the inputs.
-const COMMON = [
-  ["nrow()", "rows"],
-  ["round(, 1)", "rounded"],
-  ["mean()", "average"],
-  ["median()", "median"],
-  ["format(, big.mark = \",\")", "12,345"],
-  ["scales::percent()", "12%"],
-];
+const COMMON = ["nrow", "round", "mean", "median", "min", "max", "sum", "format", "scales::percent"];
 
 function setShinyInput(id, value) {
   if (window.Shiny && Shiny.setInputValue) {
@@ -112,7 +105,7 @@ class ProseBlock {
     // of it.
     this.el.addEventListener("focusout", (ev) => {
       const to = ev.relatedTarget;
-      if (to && (this.el.contains(to) || (this.sug && this.sug.contains(to)))) return;
+      if (to && (this.el.contains(to) || (this.popup && this.popup.contains(to)))) return;
       if (this.field) return;
       this._commit();
     });
@@ -206,7 +199,9 @@ class ProseBlock {
       chip.classList.toggle("is-dormant", !ok && !(rec && rec.ok === false));
       const text = ok ? rec.value : expr;
       if (chip.textContent !== text) chip.textContent = text;
-      chip.setAttribute("data-tip", rec && rec.ok === false ? expr + "  ·  " + rec.value : expr);
+      // pointing at a value shows its code, in the design system's tooltip
+      chip.setAttribute("data-blockr-tooltip",
+        "r " + expr + (rec && rec.ok === false ? "  \u00b7  " + rec.value : ""));
     });
   }
 
@@ -216,10 +211,11 @@ class ProseBlock {
 
   // ---- the code field --------------------------------------------------------
   //
-  // A chip opens in place as a small code field: the line reflows around it,
-  // nothing floats over the text but the suggestions. Enter or a closing
-  // backtick computes it, Escape leaves it as it was (and drops a new one),
-  // Tab takes a suggestion.
+  // A chip opens in place as a small code field, a Blockr.Input field: the
+  // line reflows around it, and its completions drop down in the field
+  // dropdown of the design system (portalled with Blockr.place, a layer with
+  // Blockr.layer). Enter or a closing backtick computes it, Escape leaves it
+  // as it was (and drops a new one), Tab or Enter takes a completion.
 
   _openField(view, pos, isNew) {
     this._closeField(true);
@@ -227,45 +223,46 @@ class ProseBlock {
     const chip = view.nodeDOM(pos);
     if (!node || !chip) return;
     const expr = node.attrs.expr || "";
+    chip.removeAttribute("data-blockr-tooltip");
 
     chip.classList.add("is-editing");
     chip.textContent = "";
-    const r = document.createElement("span");
-    r.className = "blockr-r-tag";
-    r.textContent = "r";
+    const box = document.createElement("span");
+    box.className = "blockr-input blockr-r-field";
     const input = document.createElement("input");
     input.type = "text";
-    input.className = "blockr-r-input";
+    input.className = "blockr-input__field";
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("aria-label", "R expression");
     input.spellcheck = false;
     input.value = expr;
-    chip.appendChild(r);
-    chip.appendChild(input);
-    const grow = () => { input.style.width = Math.max(2, input.value.length + 1) + "ch"; };
+    box.appendChild(input);
+    chip.appendChild(box);
+    // ch of the code face, plus the field's padding and border
+    const grow = () => { input.style.width = "calc(" + Math.max(3, input.value.length + 1) + "ch + 14px)"; };
     grow();
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
 
-    this.field = { view, pos, chip, input, expr, isNew, items: [], cur: 0 };
+    this.field = { view, pos, chip, input, expr, isNew, items: [], cur: -1 };
 
     input.addEventListener("input", () => { grow(); this._suggest(); });
     input.addEventListener("keydown", (e) => {
       e.stopPropagation();
       const f = this.field;
       if (!f) return;
-      const open = this.sug && !this.sug.hidden && f.items.length;
-      if (e.key === "ArrowDown" && open) { e.preventDefault(); f.moved = true; f.cur = Math.min(f.items.length - 1, f.cur + 1); this._mark(); }
-      else if (e.key === "ArrowUp" && open) { e.preventDefault(); f.moved = true; f.cur = Math.max(0, f.cur - 1); this._mark(); }
-      else if (e.key === "Tab" && open) { e.preventDefault(); this._take(f.items[f.cur]); }
-      else if (e.key === "Enter") {
-        e.preventDefault();
-        // Enter takes a suggestion only while one is chosen with the arrows
-        // or a name is half typed; otherwise it computes the field.
-        const word = /[A-Za-z0-9_.:$]*$/.exec(input.value)[0];
-        if (open && (f.moved || word) && f.items[f.cur].ins !== input.value) this._take(f.items[f.cur]);
-        else this._closeField(true);
-      }
+      const open = this._popupOpen();
+      if (e.key === "ArrowDown" && open) { e.preventDefault(); f.cur = Math.min(f.items.length - 1, f.cur + 1); this._mark(); }
+      else if (e.key === "ArrowUp" && open) { e.preventDefault(); f.cur = Math.max(0, f.cur - 1); this._mark(); }
+      else if ((e.key === "Tab" || e.key === "Enter") && open && f.cur >= 0 &&
+               f.items[f.cur].insert !== f.items[f.cur].token) { e.preventDefault(); this._take(f.items[f.cur]); }
+      else if (e.key === "Enter") { e.preventDefault(); this._closeField(true); }
       else if (e.key === "`") { e.preventDefault(); this._closeField(true); }
-      else if (e.key === "Escape") { e.preventDefault(); this._closeField(false); }
+      else if (e.key === "Escape") {
+        // the layer closes an open list first; Escape on a closed list leaves
+        e.preventDefault();
+        if (!f.listJustClosed) this._closeField(false);
+      }
     });
     input.addEventListener("mousedown", (e) => e.stopPropagation());
     input.addEventListener("blur", () => setTimeout(() => {
@@ -278,7 +275,7 @@ class ProseBlock {
     const f = this.field;
     if (!f) return;
     this.field = null;
-    if (this.sug) this.sug.hidden = true;
+    this._hidePopup();
     const next = f.input.value.trim();
     f.chip.classList.remove("is-editing");
     const view = f.view;
@@ -297,80 +294,105 @@ class ProseBlock {
     view.focus();
   }
 
-  // Suggestions: the inputs, then common calls; after `name$`, the columns of
-  // that input.
+  // ---- completions: the inputs and a few common calls, as Blockr.Input
+  // lists columns and functions; after `name$`, the columns of that input.
+
+  _popupOpen() {
+    return !!(this.popup && this.popup.style.display === "block" && this.field && this.field.items.length);
+  }
+
+  _hidePopup() {
+    if (this.placement) { this.placement.stop(); this.placement = null; }
+    if (this.layer) { this.layer.remove(); this.layer = null; }
+    if (this.popup) { this.popup.style.display = ""; this.popup.innerHTML = ""; }
+  }
+
   _suggest() {
     const f = this.field;
     if (!f) return;
-    if (!this.sug) {
-      this.sug = document.createElement("div");
-      this.sug.className = "blockr-r-sug";
-      this.sug.hidden = true;
-      this.sug.addEventListener("mousedown", (e) => {
+    const v = f.input.value.slice(0, f.input.selectionStart == null ? f.input.value.length : f.input.selectionStart);
+    const word = /[A-Za-z0-9_.:]*$/.exec(v)[0];
+    const items = [];
+    const dollar = /([A-Za-z.][A-Za-z0-9_.]*)\$([A-Za-z0-9_.]*)$/.exec(v);
+    const quote = (c) => (/^[A-Za-z.][A-Za-z0-9_.]*$/.test(c) ? c : "`" + c + "`");
+    if (dollar && this.inputs[dollar[1]]) {
+      const part = dollar[2].toLowerCase();
+      (this.inputs[dollar[1]] || [])
+        .filter((c) => String(c).toLowerCase().startsWith(part))
+        .forEach((c) => items.push({ text: String(c), insert: quote(String(c)), token: dollar[2], meta: "column" }));
+    } else if (word) {
+      Object.keys(this.inputs)
+        .filter((n) => n && n.toLowerCase().startsWith(word.toLowerCase()))
+        .forEach((n) => items.push({ text: n, insert: n, token: word, meta: "input" }));
+      COMMON
+        .filter((c) => c.toLowerCase().startsWith(word.toLowerCase()))
+        .forEach((c) => items.push({ text: c, insert: c, token: word, meta: "often used", fn: true }));
+    } else if (!f.input.value.trim()) {
+      // an empty field offers the inputs
+      Object.keys(this.inputs).filter(Boolean)
+        .forEach((n) => items.push({ text: n, insert: n, token: "", meta: "input" }));
+    }
+    f.items = items;
+    f.cur = items.length ? 0 : -1;
+    if (!items.length) { this._hidePopup(); return; }
+
+    if (!this.popup) {
+      this.popup = document.createElement("div");
+      this.popup.className = "blockr-input__popup blockr-r-popup";
+      this.popup.setAttribute("role", "listbox");
+      this.popup.addEventListener("mousedown", (e) => {
         e.preventDefault();
         const row = e.target.closest("[data-i]");
         if (row && this.field) this._take(this.field.items[+row.dataset.i]);
       });
-      document.body.appendChild(this.sug);
     }
-    const v = f.input.value;
-    const word = /[A-Za-z0-9_.:$]*$/.exec(v)[0];
-    const items = [];
-    const dollar = /([A-Za-z.][A-Za-z0-9_.]*)\$([A-Za-z0-9_.]*)$/.exec(v);
-    let head = "";
-    if (dollar && this.inputs[dollar[1]]) {
-      head = "In " + dollar[1];
-      (this.inputs[dollar[1]] || [])
-        .filter((c) => c.toLowerCase().startsWith(dollar[2].toLowerCase()))
-        .forEach((c) => {
-          const name = /^[A-Za-z.][A-Za-z0-9_.]*$/.test(c) ? c : "`" + c + "`";
-          items.push({ ins: v.slice(0, v.length - dollar[2].length) + name, label: c, meta: "" });
-        });
-    } else if (word || !v.trim()) {
-      // while a name is being typed, or in an empty field
-      Object.keys(this.inputs)
-        .filter((n) => n && n.startsWith(word))
-        .forEach((n) => items.push({ ins: v.slice(0, v.length - word.length) + n, label: n, meta: "input", grp: "in" }));
-      COMMON
-        .filter(([c]) => !word || c.startsWith(word))
-        .forEach(([c, m]) => items.push({ ins: v.slice(0, v.length - word.length) + c, label: c, meta: m, grp: "fn", fn: true }));
-    }
-    f.items = items;
-    f.cur = 0;
-    f.moved = false;
-    if (!items.length) { this.sug.hidden = true; return; }
-    let html = head ? `<div class="blockr-r-sug-title">${esc(head)}</div>` : "";
-    items.forEach((it, i) => {
-      if (!head && (i === 0 || items[i - 1].grp !== it.grp)) {
-        html += `<div class="blockr-r-sug-title">${it.grp === "in" ? "Inputs" : "Often used"}</div>`;
+    this.popup.innerHTML = items.map((it, i) =>
+      `<div class="blockr-input__item" role="option" data-i="${i}">` +
+      `<span class="blockr-input__item-text">${esc(it.text)}</span>` +
+      (it.fn ? '<span class="blockr-input__item-parens">()</span>' : "") +
+      `<span class="blockr-input__item-meta">${esc(it.meta)}</span></div>`).join("");
+    if (this.popup.style.display !== "block") {
+      document.body.appendChild(this.popup);
+      this.popup.style.display = "block";
+      if (window.Blockr && Blockr.place) {
+        this.placement = Blockr.place(this.popup, f.chip, { gap: 2, width: { min: 220, max: 320 } });
       }
-      html += `<div class="blockr-r-sug-row" data-i="${i}"><code>${esc(it.label)}</code><span>${esc(it.meta)}</span></div>`;
-    });
-    this.sug.innerHTML = html;
-    const r = f.chip.getBoundingClientRect();
-    this.sug.style.left = (r.left + window.scrollX) + "px";
-    this.sug.style.top = (r.bottom + window.scrollY + 6) + "px";
-    this.sug.hidden = false;
+      if (window.Blockr && Blockr.layer) {
+        this.layer = Blockr.layer(this.popup, {
+          from: f.chip,
+          escape: () => {
+            const g = this.field;
+            this._hidePopup();
+            if (g) { g.listJustClosed = true; setTimeout(() => { g.listJustClosed = false; }, 0); }
+          },
+          outside: () => this._hidePopup(),
+        });
+      }
+    }
     this._mark();
   }
 
   _mark() {
-    if (!this.sug || !this.field) return;
-    this.sug.querySelectorAll("[data-i]").forEach((row) =>
-      row.classList.toggle("is-cur", +row.dataset.i === this.field.cur));
+    if (!this.popup || !this.field) return;
+    this.popup.querySelectorAll("[data-i]").forEach((row) =>
+      row.classList.toggle("blockr-input__item--highlighted", +row.dataset.i === this.field.cur));
   }
 
   _take(it) {
     const f = this.field;
     if (!f || !it) return;
-    f.input.value = it.ins;
-    f.input.dispatchEvent(new Event("input"));
-    f.input.focus();
-    // a function puts the cursor inside its parentheses
-    if (it.fn) {
-      const p = it.ins.lastIndexOf("(") + 1;
-      f.input.setSelectionRange(p, p);
-    }
+    const inp = f.input;
+    const at = inp.selectionStart == null ? inp.value.length : inp.selectionStart;
+    const start = at - it.token.length;
+    const ins = it.fn ? it.insert + "()" : it.insert;
+    inp.value = inp.value.slice(0, start) + ins + inp.value.slice(at);
+    // a function puts the cursor between its parentheses
+    const caret = start + (it.fn ? ins.length - 1 : ins.length);
+    inp.setSelectionRange(caret, caret);
+    inp.dispatchEvent(new Event("input"));
+    inp.focus();
+    // a finished name needs no list
+    if (!it.fn) this._hidePopup();
   }
 }
 

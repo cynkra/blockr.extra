@@ -179,6 +179,7 @@ new_prose_block <- function(text = character(), ...) {
     },
     function(id) {
       shiny::tagList(
+        blockr.ui::controls_dep(),
         prose_block_dep(),
         shiny::div(
           id = shiny::NS(id, "editor"),
