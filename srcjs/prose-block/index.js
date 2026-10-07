@@ -17,10 +17,11 @@
 // A host that shows several texts as one document (blockr.page) treats the
 // edges of each as passages to the next: at an edge, the arrow keys,
 // Backspace and Delete raise `prose-edge` on the element, and a host that
-// handles it cancels the event. `el.blockrProse` is the controller, for
-// focusAt() and join().
+// handles it cancels the event. A "/" typed on an empty line raises
+// `prose-slash` the same way, for the host's insert menu. `el.blockrProse`
+// is the controller, for focusAt(), join() and splitHere().
 
-import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core";
+import { Editor, rootCtx, defaultValueCtx, editorViewCtx, serializerCtx } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
@@ -137,6 +138,7 @@ class ProseBlock {
   }
 
   _edge(ev) {
+    if (ev.key === "/") return this._slash(ev);
     if (this.field || ev.defaultPrevented || ev.shiftKey || ev.altKey || ev.metaKey || ev.ctrlKey || ev.isComposing) return;
     const view = this._view();
     if (!view) return;
@@ -166,11 +168,61 @@ class ProseBlock {
     }
   }
 
+  // "/" on an empty line of its own, not in a list or a quote
+  _slash(ev) {
+    if (this.field || ev.defaultPrevented || ev.altKey || ev.metaKey || ev.ctrlKey || ev.isComposing) return;
+    const view = this._view();
+    if (!view) return;
+    const sel = view.state.selection, $h = sel.$head;
+    if (!sel.empty || $h.depth !== 1 || $h.parent.type.name !== "paragraph" || $h.parent.content.size) return;
+    const r = view.coordsAtPos(sel.head);
+    const e = new CustomEvent("prose-slash", {
+      bubbles: true,
+      cancelable: true,
+      detail: { left: r.left, top: r.top, bottom: r.bottom }
+    });
+    if (!this.el.dispatchEvent(e)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  }
+
+  // The text around the cursor's line, as markdown: what comes before the
+  // line and what comes after it. The line itself is in neither.
+  splitHere() {
+    const view = this._view();
+    if (!view) return null;
+    const st = view.state, $h = st.selection.$head, doc = st.doc;
+    if ($h.depth < 1) return null;
+    const ser = this.editor.action((ctx) => ctx.get(serializerCtx));
+    const md = (frag) => frag.size ? ser(doc.type.create(doc.attrs, frag)).replace(/\n+$/, "") : "";
+    return { before: md(doc.content.cut(0, $h.before(1))), after: md(doc.content.cut($h.after(1))) };
+  }
+
+  // The cursor's line out of the text, unless it is the only one.
+  dropLine() {
+    const view = this._view();
+    if (!view) return;
+    const $h = view.state.selection.$head;
+    if ($h.depth < 1 || view.state.doc.childCount < 2) return;
+    view.dispatch(view.state.tr.delete($h.before(1), $h.after(1)));
+  }
+
+  // Text typed in for the host: at the cursor, as if typed.
+  typeHere(text) {
+    const view = this._view();
+    if (!view) return;
+    view.dispatch(view.state.tr.insertText(text));
+    view.focus();
+  }
+
   // The cursor into the text: "start", "end", or on its first or last line
-  // ("first", "last") as close to `x` as the line allows.
+  // ("first", "last") as close to `x` as the line allows; "here" keeps it
+  // where it was.
   focusAt(where, x) {
     const view = this._view();
     if (!view) return false;
+    if (where === "here") { view.focus(); return true; }
     const doc = view.state.doc;
     let sel = where === "start" || where === "first" ? Selection.atStart(doc) : Selection.atEnd(doc);
     if ((where === "first" || where === "last") && x != null) {
