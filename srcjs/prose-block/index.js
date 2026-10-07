@@ -42,6 +42,7 @@ class ProseBlock {
     this.markdown = el.dataset.initial || "";
     this.committed = this.markdown;
     this.inputs = {}; // input name -> [columns]
+    this.offer = {}; // object a host offers -> { name, cols } (blockr.page: the blocks above)
     this.values = {}; // expr -> {ok, value}
     this._sentExprs = "";
     this._applyingExternal = false;
@@ -209,6 +210,18 @@ class ProseBlock {
     this.inputs = inputs || {};
   }
 
+  setOffer(offer) {
+    this.offer = offer || {};
+  }
+
+  // What the code can name: the inputs, and what a host offers besides.
+  _objects() {
+    const out = {};
+    Object.entries(this.offer).forEach(([k, o]) => { out[k] = { cols: (o && o.cols) || [], meta: (o && o.name) || "block" }; });
+    Object.entries(this.inputs).forEach(([k, cols]) => { if (k) out[k] = { cols: cols || [], meta: (out[k] && out[k].meta) || "input" }; });
+    return out;
+  }
+
   // ---- the code field --------------------------------------------------------
   //
   // A chip opens in place as a small code field, a Blockr.Input field: the
@@ -315,22 +328,23 @@ class ProseBlock {
     const items = [];
     const dollar = /([A-Za-z.][A-Za-z0-9_.]*)\$([A-Za-z0-9_.]*)$/.exec(v);
     const quote = (c) => (/^[A-Za-z.][A-Za-z0-9_.]*$/.test(c) ? c : "`" + c + "`");
-    if (dollar && this.inputs[dollar[1]]) {
+    const objs = this._objects();
+    if (dollar && objs[dollar[1]]) {
       const part = dollar[2].toLowerCase();
-      (this.inputs[dollar[1]] || [])
+      (objs[dollar[1]].cols || [])
         .filter((c) => String(c).toLowerCase().startsWith(part))
         .forEach((c) => items.push({ text: String(c), insert: quote(String(c)), token: dollar[2], meta: "column" }));
     } else if (word) {
-      Object.keys(this.inputs)
-        .filter((n) => n && n.toLowerCase().startsWith(word.toLowerCase()))
-        .forEach((n) => items.push({ text: n, insert: n, token: word, meta: "input" }));
+      Object.keys(objs)
+        .filter((n) => n.toLowerCase().startsWith(word.toLowerCase()))
+        .forEach((n) => items.push({ text: n, insert: n, token: word, meta: objs[n].meta }));
       COMMON
         .filter((c) => c.toLowerCase().startsWith(word.toLowerCase()))
         .forEach((c) => items.push({ text: c, insert: c, token: word, meta: "often used", fn: true }));
     } else if (!f.input.value.trim()) {
       // an empty field offers the inputs
-      Object.keys(this.inputs).filter(Boolean)
-        .forEach((n) => items.push({ text: n, insert: n, token: "", meta: "input" }));
+      Object.keys(objs)
+        .forEach((n) => items.push({ text: n, insert: n, token: "", meta: objs[n].meta }));
     }
     f.items = items;
     f.cur = items.length ? 0 : -1;
@@ -442,6 +456,12 @@ function register() {
     Shiny.addCustomMessageHandler("prose-columns", (msg) => {
       const inst = instances.get(msg.id);
       if (inst) inst.setInputs(msg.inputs || {});
+    });
+    // A host (blockr.page) offers objects the text may name besides the
+    // inputs: naming one is how the text comes to read from it.
+    Shiny.addCustomMessageHandler("prose-offer", (msg) => {
+      const inst = instances.get(msg.id);
+      if (inst) inst.setOffer(msg.objects || {});
     });
     Shiny.addCustomMessageHandler("prose-values", (msg) => {
       const inst = instances.get(msg.id);

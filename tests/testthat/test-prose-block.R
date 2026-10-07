@@ -220,3 +220,8 @@ test_that("inline_r writes values in and leaves code alone", {
   expect_identical(inline_r("`r letters[1:3]`"), "a, b, c")
   expect_error(inline_r("`r no_such_thing`"), "no_such_thing")
 })
+
+test_that("a prose block needs no input", {
+  b <- new_prose_block("Just text.")
+  expect_identical(blockr.core:::block_min_args(b), 0L)
+})

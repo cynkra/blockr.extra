@@ -193,6 +193,8 @@ new_prose_block <- function(text = character(), ...) {
     expr_type = "bquoted",
     class = "prose_block",
     external_ctrl = "text",
+    # text needs no input: one without any computes, as plain text
+    allow_empty_state = list(data = list(`...args` = 0L)),
     ...
   )
 }
