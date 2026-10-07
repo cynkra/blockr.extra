@@ -13,12 +13,20 @@
 //     on a keystroke.
 //
 // R -> JS push (`prose-set`) handles external (AI) writes.
+//
+// A host that shows several texts as one document (blockr.page) treats the
+// edges of each as passages to the next: at an edge, the arrow keys,
+// Backspace and Delete raise `prose-edge` on the element, and a host that
+// handles it cancels the event. `el.blockrProse` is the controller, for
+// focusAt() and join().
 
-import { Editor, rootCtx, defaultValueCtx } from "@milkdown/kit/core";
+import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
-import { replaceAll } from "@milkdown/kit/utils";
+import { replaceAll, getMarkdown } from "@milkdown/kit/utils";
+import { Selection, TextSelection } from "@milkdown/kit/prose/state";
+import { joinBackward } from "@milkdown/kit/prose/commands";
 import { inlineRNode, inlineRRemark, inlineRPlugin, collectExprs } from "./inline-r.js";
 
 const instances = new Map(); // el.id -> ProseBlock
@@ -49,6 +57,7 @@ class ProseBlock {
     this._rawEditing = false;
     this.editor = null;
     this.field = null; // the open code field
+    el.blockrProse = this;
 
     this._buildDom();
     this._initEditor().catch((e) => console.error("[prose] init failed", e));
@@ -116,6 +125,89 @@ class ProseBlock {
         this._commit();
       }
     });
+    // before the editor's own keys
+    this.editorHost.addEventListener("keydown", (ev) => this._edge(ev), true);
+  }
+
+  // ---- edges: the host's passage to the next text ----------------------------
+
+  _view() {
+    if (!this.editor) return null;
+    try { return this.editor.action((ctx) => ctx.get(editorViewCtx)); } catch (e) { return null; }
+  }
+
+  _edge(ev) {
+    if (this.field || ev.defaultPrevented || ev.shiftKey || ev.altKey || ev.metaKey || ev.ctrlKey || ev.isComposing) return;
+    const view = this._view();
+    if (!view) return;
+    const st = view.state, sel = st.selection, doc = st.doc;
+    if (!sel.empty) return;
+    const atStart = sel.head <= Selection.atStart(doc).head;
+    const atEnd = sel.head >= Selection.atEnd(doc).head;
+    const para = (n) => n && n.type.name === "paragraph";
+    let dir = null;
+    if (ev.key === "ArrowUp" && sel.$head.index(0) === 0 && view.endOfTextblock("up")) dir = "up";
+    else if (ev.key === "ArrowDown" && sel.$head.index(0) === doc.childCount - 1 && view.endOfTextblock("down")) dir = "down";
+    else if (ev.key === "ArrowLeft" && atStart) dir = "left";
+    else if (ev.key === "ArrowRight" && atEnd) dir = "right";
+    // Backspace at the start of a heading or a list lifts it, as it should
+    else if (ev.key === "Backspace" && atStart && para(doc.firstChild)) dir = "back";
+    else if (ev.key === "Delete" && atEnd && para(doc.lastChild)) dir = "forward";
+    if (!dir) return;
+    const caret = view.coordsAtPos(sel.head);
+    const e = new CustomEvent("prose-edge", {
+      bubbles: true,
+      cancelable: true,
+      detail: { dir: dir, x: caret.left, empty: this.isEmpty() }
+    });
+    if (!this.el.dispatchEvent(e)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  }
+
+  // The cursor into the text: "start", "end", or on its first or last line
+  // ("first", "last") as close to `x` as the line allows.
+  focusAt(where, x) {
+    const view = this._view();
+    if (!view) return false;
+    const doc = view.state.doc;
+    let sel = where === "start" || where === "first" ? Selection.atStart(doc) : Selection.atEnd(doc);
+    if ((where === "first" || where === "last") && x != null) {
+      const r = view.dom.getBoundingClientRect();
+      const y = where === "first" ? r.top + 6 : r.bottom - 6;
+      const hit = view.posAtCoords({ left: x, top: y });
+      if (hit) sel = TextSelection.near(doc.resolve(hit.pos));
+    }
+    view.dispatch(view.state.tr.setSelection(sel).scrollIntoView());
+    view.focus();
+    return true;
+  }
+
+  // Another text joined onto the end of this one, as Backspace joins two
+  // paragraphs: its first paragraph runs on from this one's last, the cursor
+  // at the seam. Commits.
+  join(md) {
+    const view = this._view();
+    if (!view) return;
+    md = (md || "").replace(/\n+$/, "");
+    if (!md.trim()) { this.focusAt("end"); return; }
+    const seam = Selection.atEnd(view.state.doc).head;
+    const mine = this.text();
+    const both = mine.trim() ? mine + "\n\n" + md : md;
+    this.markdown = both;
+    this.textarea.value = both;
+    this._applyToWysiwyg(both);
+    const v = this._view();
+    if (this.markdown !== md) {
+      // the cursor at the start of the joined text, then join backward
+      const $p = v.state.doc.resolve(Math.min(seam + 2, v.state.doc.content.size));
+      v.dispatch(v.state.tr.setSelection(TextSelection.near($p)));
+      joinBackward(v.state, v.dispatch);
+    }
+    v.focus();
+    this._afterChange();
+    this._commit();
   }
 
   // ---- sync ------------------------------------------------------------------
@@ -155,7 +247,31 @@ class ProseBlock {
     this._paint();
   }
 
+  // The editor reports its markdown on a debounce; this reads it now, so a
+  // commit or a host never sees text that is a few keystrokes old.
+  text() {
+    if (this.editor && !this._rawEditing) {
+      try {
+        const md = this.editor.action(getMarkdown()).replace(/\n+$/, "");
+        if (md !== this.markdown) {
+          this.markdown = md;
+          if (this.textarea.value !== md) this.textarea.value = md;
+          this._afterChange();
+        }
+      } catch (e) { /* not ready */ }
+    }
+    return this.markdown;
+  }
+
+  isEmpty() {
+    const view = this._view();
+    if (!view) return !this.markdown.trim();
+    const doc = view.state.doc;
+    return doc.childCount === 1 && doc.firstChild.isTextblock && doc.firstChild.content.size === 0;
+  }
+
   _commit() {
+    this.text();
     if (this.markdown === this.committed) return;
     this.committed = this.markdown;
     setShinyInput(this.inputId, this.markdown);
