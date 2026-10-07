@@ -62,6 +62,13 @@
   background: var(--blockr-color-bg-hover, #f3f4f6);
 }
 
+/* A value that just changed, for a few seconds. */
+.blockr-r-chip.is-changed {
+  background: var(--blockr-color-bg-accent-subtle, #eff6ff);
+  text-decoration-color: var(--blockr-color-border-accent, #2563eb);
+  transition: background-color 1.2s ease;
+}
+
 /* No value yet (no data, or the round trip has not come back): its code. */
 .blockr-r-chip.is-dormant,
 .blockr-r-chip.is-err {

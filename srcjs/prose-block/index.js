@@ -34,6 +34,8 @@ import { inlineRNode, inlineRRemark, inlineRPlugin, collectExprs } from "./inlin
 const instances = new Map(); // el.id -> ProseBlock
 
 // A few calls that come up in sentences, offered under the inputs.
+const CHANGED_MS = 8000;
+
 const COMMON = ["nrow", "round", "mean", "median", "min", "max", "sum", "format", "scales::percent"];
 
 function setShinyInput(id, value) {
@@ -390,9 +392,21 @@ class ProseBlock {
     setShinyInput(this.exprsId, exprs);
   }
 
+  // A value that changed since it was last shown is tinted for a while, so
+  // a block that moves the numbers in a sentence does not go unnoticed.
   setValues(values) {
+    const now = Date.now();
+    this._changed = this._changed || {};
+    Object.entries(values || {}).forEach(([expr, rec]) => {
+      const old = this.values[expr];
+      if (old && old.ok === true && rec && rec.ok === true && old.value !== rec.value) {
+        this._changed[expr] = now + CHANGED_MS;
+      }
+    });
     this.values = values || {};
     this._paint();
+    clearTimeout(this._unpaint);
+    this._unpaint = setTimeout(() => this._paint(), CHANGED_MS + 50);
   }
 
   // Every chip from the value store: its value when the server sent one, its
@@ -405,6 +419,7 @@ class ProseBlock {
       const ok = rec && rec.ok === true;
       chip.classList.toggle("is-err", !!rec && rec.ok === false);
       chip.classList.toggle("is-dormant", !ok && !(rec && rec.ok === false));
+      chip.classList.toggle("is-changed", ok && (this._changed || {})[expr] > Date.now());
       const text = ok ? rec.value : expr;
       if (chip.textContent !== text) chip.textContent = text;
       // pointing at a value shows its code, in the design system's tooltip
