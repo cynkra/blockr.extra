@@ -190,6 +190,58 @@ class ProseBlock {
     }
   }
 
+  // ---- find and replace, for a host ------------------------------------------
+  //
+  // find() gives each match of `q` (any case) as editor positions, in order;
+  // a match does not run across a value. rangeOf() is a match as a DOM range,
+  // to highlight; replaceRange() puts text in its place and commits.
+
+  find(q) {
+    const view = this._view();
+    if (!view || !q) return [];
+    const needle = q.toLowerCase(), out = [];
+    view.state.doc.descendants((node, pos) => {
+      if (!node.isTextblock) return true;
+      let text = "";
+      const map = [];
+      node.forEach((child, off) => {
+        if (child.isText) {
+          for (let i = 0; i < child.text.length; i++) map.push(pos + 1 + off + i);
+          text += child.text;
+        } else {
+          map.push(-1);
+          text += "\ufffc";
+        }
+      });
+      const hay = text.toLowerCase();
+      for (let i = hay.indexOf(needle); i >= 0; i = hay.indexOf(needle, i + needle.length)) {
+        const a = map[i], b = map[i + needle.length - 1];
+        if (a >= 0 && b >= 0 && b - a === needle.length - 1) out.push({ from: a, to: b + 1 });
+      }
+      return false;
+    });
+    return out;
+  }
+
+  rangeOf(m) {
+    const view = this._view();
+    if (!view) return null;
+    try {
+      const s = view.domAtPos(m.from), e = view.domAtPos(m.to);
+      const r = document.createRange();
+      r.setStart(s.node, s.offset);
+      r.setEnd(e.node, e.offset);
+      return r;
+    } catch (err) { return null; }
+  }
+
+  replaceRange(m, text) {
+    const view = this._view();
+    if (!view) return;
+    view.dispatch(view.state.tr.insertText(text, m.from, m.to));
+    this._commit();
+  }
+
   // ---- links: Cmd/Ctrl+K -------------------------------------------------------
   //
   // On selected words, a small field for the address; in a link, the same
