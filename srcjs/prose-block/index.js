@@ -31,8 +31,13 @@ import { replaceAll, getMarkdown } from "@milkdown/kit/utils";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import { joinBackward } from "@milkdown/kit/prose/commands";
 import { inlineRNode, inlineRRemark, inlineRPlugin, collectExprs } from "./inline-r.js";
+import { xrefNode, xrefRemark } from "./xref.js";
 
 const instances = new Map(); // el.id -> ProseBlock
+
+// What a host calls the figures and tables a text refers to: label -> name
+// ("fig-mdl" -> "Figure 2"), one map for every text on the page.
+let REFS = {};
 
 // A few calls that come up in sentences, offered under the inputs.
 const CHANGED_MS = 8000;
@@ -109,6 +114,8 @@ class ProseBlock {
       .use(history)
       .use(inlineRRemark)
       .use(inlineRNode)
+      .use(xrefRemark)
+      .use(xrefNode)
       .use(inlineRPlugin((view, pos, isNew) => self._openField(view, pos, isNew)))
       .create();
 
@@ -545,6 +552,7 @@ class ProseBlock {
   // Every chip from the value store: its value when the server sent one, its
   // code while it has not (no data yet), its code in red when it failed.
   _paint() {
+    this._paintRefs();
     this.editorHost.querySelectorAll(".blockr-r-chip").forEach((chip) => {
       if (chip.classList.contains("is-editing")) return;
       const expr = chip.getAttribute("data-r") || "";
@@ -559,6 +567,32 @@ class ProseBlock {
       chip.setAttribute("data-blockr-tooltip",
         "r " + expr + (rec && rec.ok === false ? "  \u00b7  " + rec.value : ""));
     });
+  }
+
+  // The names of the figures and tables, for every text: what a reference
+  // shows. One it does not know shows its label.
+  setRefs(refs) {
+    REFS = refs || {};
+    instances.forEach((inst) => inst._paintRefs());
+  }
+
+  _paintRefs() {
+    this.editorHost.querySelectorAll(".blockr-xref").forEach((x) => {
+      const key = x.getAttribute("data-xref") || "";
+      const text = REFS[key] || "@" + key;
+      if (x.textContent !== text) x.textContent = text;
+      x.classList.toggle("is-unknown", !REFS[key]);
+    });
+  }
+
+  // A reference at the cursor.
+  insertRef(key) {
+    const view = this._view();
+    if (!view) return;
+    const type = view.state.schema.nodes.xref;
+    view.dispatch(view.state.tr.replaceSelectionWith(type.create({ key: key })));
+    view.focus();
+    this.text();
   }
 
   setInputs(inputs) {

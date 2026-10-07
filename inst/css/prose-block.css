@@ -155,3 +155,16 @@
   box-shadow: var(--blockr-shadow-md, 0 8px 24px rgba(17, 24, 39, .12)); padding: 4px;
 }
 .blockr-prose-link .blockr-input__field { width: 260px; }
+
+/* ---- a reference to a figure or a table ---------------------------------------- */
+.blockr-xref {
+  white-space: nowrap;
+  text-decoration: underline dotted var(--blockr-color-text-subtle, #9ca3af);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+.blockr-xref.is-unknown {
+  font-family: var(--blockr-font-mono, 'SF Mono', monospace);
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-color-text-muted, #6b7280);
+}
