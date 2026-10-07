@@ -38,7 +38,7 @@ register_extra_blocks <- function() {
       "Compare two data frames on key columns and compute diff metrics on measurement columns.",
       "Filter rows by case-insensitive substring match across all columns.",
       "Add or edit column labels (the `attr(col, \"label\")` attribute shown in column pickers and table headers). Empty label removes it.",
-      "Rich-text (WYSIWYG) markdown notes with glue data interpolation. Data references in braces render as live value chips."
+      "Text that can compute: markdown edited as it reads, with inline R as `r expr` (Quarto's form). Values show in the text, marked with a dotted underline."
     ),
     category = c(
       "transform",
@@ -121,12 +121,10 @@ register_extra_blocks <- function() {
       ),
       # new_prose_block:
       paste(
-        "Write `text` as GFM markdown. Braces hold glue references evaluated",
-        "against the input data, which is bound by its INPUT NAME (usually",
-        "`data`): {nrow(data)}, {data$Species[1]},",
-        "{round(mean(data$mpg), 1)}. A bare {colname} does NOT resolve.",
-        "Braces that are literal text (Quarto attributes, shortcodes) must be",
-        "doubled: {{.callout-note}}."
+        "Write `text` as GFM markdown. Compute values with inline R the way",
+        "Quarto writes it: `r nrow(data)`, `r round(mean(data$mpg), 1)`.",
+        "Each input is bound by its INPUT NAME (usually `data`); a bare",
+        "column name does NOT resolve. Braces and other text need no escaping."
       )
     ),
     arguments = list(
@@ -202,8 +200,8 @@ register_extra_blocks <- function() {
       # new_prose_block:
       new_arg_specs(
         text = new_arg_spec(
-          "Markdown string for the note. Braces hold glue references evaluated against the input data, bound by input name (e.g. `data`); literal braces must be doubled.",
-          example = "## Summary\n\nThe dataset has **{nrow(data)}** rows.",
+          "Markdown string for the text. Inline R as `r expr` is evaluated with the inputs bound by input name (e.g. `data`).",
+          example = "## Summary\n\nThe dataset has **`r nrow(data)`** rows.",
           type = arg_string()
         )
       )

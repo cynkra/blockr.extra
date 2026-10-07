@@ -1,33 +1,27 @@
 #' Prose Block
 #'
-#' A WYSIWYG-first text block: a rich-text editor (no markdown syntax to learn)
-#' backed by canonical markdown. The editor lives in the block control; the
-#' rendered, glue-evaluated markdown is the block result. A collapsible
-#' "Markdown source" field exposes the raw markdown, two-way synced with the
-#' editor. The `text` parameter is externally controllable, so an assistant
-#' (blockr.ai) can write the note as markdown at runtime.
+#' Text that can compute. The block holds markdown, edited as it reads (bold
+#' as bold, no syntax to learn), and R inside it the way Quarto writes inline
+#' code: `` `r nrow(data)` ``. Typing `` `r `` and a space in the editor opens
+#' a small code field that suggests the inputs, their columns and a few common
+#' functions; Enter computes it, and the text shows the value, marked with a
+#' dotted underline. Pointing at a value shows its code, a click edits it.
 #'
-#' Like [blockr.core::new_glue_block()], the text is evaluated with
-#' [glue::glue()] against the input data, which is bound by its input name (e.g.
-#' `data`). Reference data with `{nrow(data)}`, `{data$colname}` or
-#' `{round(mean(data$mpg), 1)}` -- a bare `{colname}` does not resolve. In the
-#' editor a reference renders as a chip showing its evaluated VALUE (the
-#' expression is one click away); each chip is evaluated on its own, so a typo
-#' in one reference marks that chip and leaves the rest of the text standing.
+#' The markdown with its code is the block's setting, in its control. Its
+#' result is the markdown with the values written in, which the next block
+#' takes as text (a report, a slide). Because the code is Quarto's own inline
+#' code, the same text runs in a Quarto document where the inputs are objects
+#' of the same names.
 #'
-#' Two things run on different clocks. Chip values refresh eagerly -- the
-#' editor sends the expressions, the server evaluates each in the same
-#' environment glue gets and pushes the values back -- which costs nothing in
-#' the DAG. The document itself commits only on blur, Ctrl-Enter or the Apply
-#' footer, never on a keystroke, so typing does not re-evaluate downstream
-#' blocks.
+#' Inputs are bound by their input name: a link with `input = "data"` makes
+#' `data` available. An expression that fails marks its value in the editor;
+#' in the result it stops the block with the error.
 #'
-#' Braces the author types as literal text (Quarto attributes, shortcodes) are
-#' escaped by the editor on the way out (doubled, glue's own escape), so the
-#' stored markdown stays a valid glue template with no syntax for the author to
-#' learn.
+#' Values refresh eagerly as you type, outside the DAG. The text itself
+#' commits on blur or Ctrl+Enter, never on a keystroke, so typing does not
+#' recompute the blocks downstream.
 #'
-#' @param text Markdown string, evaluated with [glue::glue()].
+#' @param text Markdown string, with inline R as `` `r expr` ``.
 #' @param ... Forwarded to [blockr.core::new_block()].
 #'
 #' @return A `prose_block` (also a `text_block`).
@@ -39,7 +33,7 @@
 #'     new_board(
 #'       blocks = list(
 #'         data = new_dataset_block("iris", "datasets"),
-#'         note = new_prose_block("## Iris\n\nThere are **{nrow(data)}** rows.")
+#'         note = new_prose_block("## Iris\n\nThere are **`r nrow(data)`** rows.")
 #'       ),
 #'       links = links(from = "data", to = "note", input = "data")
 #'     )
@@ -86,12 +80,10 @@ new_prose_block <- function(text = character(), ...) {
             stats::setNames(names(...args), dot_args_names(...args))
           )
 
-          # The live twin of the quoted env the expr builds below: the same
-          # input names bound to the current data values, for the per-chip
-          # preview. Inputs that are not ready bind nothing, so before data
-          # arrives this env is empty and the preview reports dormant rather
-          # than errors.
-          r_env <- shiny::reactive({
+          # The inputs bound by input name to their current values, for the
+          # value preview. Inputs that are not ready bind nothing, so before
+          # data arrives the preview reports dormant rather than errors.
+          r_data <- shiny::reactive({
             nms <- dot_args_names(...args)
             if (is.null(nms)) {
               nms <- names(...args)
@@ -100,57 +92,38 @@ new_prose_block <- function(text = character(), ...) {
               arg_value(...args[[nm]])
             })
             names(vals) <- nms
-            list2env(Filter(Negate(is.null), vals), parent = baseenv())
+            Filter(Negate(is.null), vals)
           })
 
-          # Columns per input -> JS, for the "insert data field" chip menu.
-          # Read off the data reactives (...args), keyed by dot name.
+          # Inputs and their columns -> JS, for the code field's suggestions.
           shiny::observe({
-            inputs <- lapply(shiny::isolate(names(...args)), function(nm) {
-              as.list(colnames(arg_value(...args[[nm]])))
+            inputs <- lapply(r_data(), function(x) {
+              as.list(if (is.data.frame(x)) colnames(x) else names(x))
             })
-            nm <- dot_args_names(...args)
-            if (is.null(nm)) nm <- names(...args)
-            names(inputs) <- nm
             session$sendCustomMessage(
               "prose-columns",
               list(id = session$ns("editor"), inputs = inputs)
             )
           })
 
-          # Chip preview: the editor reports every reference expression it
-          # holds (eagerly, on edit -- NOT the document commit), each is
-          # evaluated on its own against r_env(), and the values travel back
-          # in one message. A failure is local to its chip; nothing here
-          # touches the block's expr or the DAG.
+          # Value preview: the editor reports every inline expression it
+          # holds (eagerly, on edit, not the document commit); each is
+          # evaluated on its own and the values travel back in one message.
+          # A failure is local to its value; nothing here touches the DAG.
           shiny::observe({
             exprs <- unique(unlist(input$prose_exprs))
-            env <- r_env()
+            data <- r_data()
 
             if (length(exprs) == 0L) {
               return()
             }
 
-            dormant <- length(ls(env)) == 0L
-
             vals <- lapply(exprs, function(e) {
-              if (dormant) {
+              if (!length(data)) {
                 return(list(ok = NA))
               }
               tryCatch(
-                {
-                  v <- eval(parse(text = e)[[1L]], env)
-                  # Bound the preview before formatting: a chip on a whole
-                  # column must not stringify a million values to show 80
-                  # characters.
-                  n <- length(v)
-                  v <- paste(format(utils::head(v, 20L), trim = TRUE),
-                             collapse = ", ")
-                  if (n > 20L || nchar(v) > 80L) {
-                    v <- paste0(substr(v, 1L, 79L), "…")
-                  }
-                  list(ok = TRUE, value = v)
-                },
+                list(ok = TRUE, value = inline_value(eval_inline(e, data), 80L)),
                 error = function(err) {
                   list(ok = FALSE, value = conditionMessage(err))
                 }
@@ -166,9 +139,8 @@ new_prose_block <- function(text = character(), ...) {
             )
           })
 
-          # UI -> state (explicit commit from JS: blur / Ctrl-Enter / Apply).
-          # Guard so an external write is not clobbered by a stale commit
-          # (static UI, no Pattern B needed).
+          # UI -> state (explicit commit from JS: blur / Ctrl-Enter). Guard so
+          # an external write is not clobbered by a stale commit.
           shiny::observeEvent(input$text, {
             if (!identical(input$text, shiny::isolate(r_text()))) {
               r_text(input$text)
@@ -187,15 +159,15 @@ new_prose_block <- function(text = character(), ...) {
           list(
             expr = shiny::reactive(
               bquote(
-                glue::glue(.(txt), .envir = .(env), .trim = FALSE),
+                blockr.extra::inline_r(.(txt), list(..(data))),
                 list(
                   txt = r_text(),
-                  env = bquote(
-                    list2env(list(..(data)), parent = baseenv()),
-                    list(data = lapply(arg_names(), as_dot_call)),
-                    splice = TRUE
+                  data = stats::setNames(
+                    lapply(arg_names(), as_dot_call),
+                    names(arg_names())
                   )
-                )
+                ),
+                splice = TRUE
               )
             ),
             state = list(
@@ -222,6 +194,73 @@ new_prose_block <- function(text = character(), ...) {
     external_ctrl = "text",
     ...
   )
+}
+
+#' Inline R in markdown
+#'
+#' Writes the value of every `` `r expr` `` in a markdown string into the
+#' text, as knitr does for inline code: each expression is evaluated with the
+#' objects in `data` in scope, and its value replaces the code. Code in fenced
+#' blocks and other inline code are left alone.
+#'
+#' @param text A markdown string.
+#' @param data A named list of objects the expressions can use.
+#'
+#' @return The markdown string with the values written in.
+#'
+#' @examples
+#' inline_r("There are `r nrow(data)` cars.", list(data = mtcars))
+#'
+#' @export
+inline_r <- function(text, data = list()) {
+
+  text <- paste(text, collapse = "\n")
+  if (!nzchar(text)) {
+    return(text)
+  }
+  # split keeping empty lines, a trailing newline included
+  lines <- regmatches(text, gregexpr("\n", text), invert = TRUE)[[1L]]
+  fence <- cumsum(grepl("^\\s*(```|~~~)", lines)) %% 2L == 1L |
+    grepl("^\\s*(```|~~~)", lines)
+
+  pat <- "`r[ \t]+([^`]+)`"
+
+  for (i in which(!fence)) {
+    m <- gregexpr(pat, lines[i], perl = TRUE)[[1L]]
+    if (m[1L] == -1L) next
+    codes <- regmatches(lines[i], list(m))[[1L]]
+    vals <- vapply(
+      codes,
+      function(code) {
+        inline_value(eval_inline(sub(pat, "\\1", code, perl = TRUE), data))
+      },
+      character(1L)
+    )
+    regmatches(lines[i], list(m)) <- list(vals)
+  }
+
+  paste(lines, collapse = "\n")
+}
+
+# One inline expression, evaluated with the inputs in scope. Functions come
+# from the search path, as they do in a Quarto document.
+eval_inline <- function(expr, data) {
+  env <- list2env(as.list(data), parent = globalenv())
+  eval(parse(text = expr, keep.source = FALSE)[[1L]], env)
+}
+
+# A value as text in a sentence: numbers as format() writes them, a vector
+# as a comma-separated list. `max` shortens it for the editor's preview.
+inline_value <- function(x, max = NULL) {
+  if (is.factor(x)) {
+    x <- as.character(x)
+  }
+  n <- length(x)
+  out <- paste(format(utils::head(x, 20L), trim = TRUE, big.mark = ""), collapse = ", ")
+  if (!is.null(max) && (n > 20L || nchar(out) > max)) {
+    out <- paste0(substr(out, 1L, max - 1L), "…")
+  }
+  out
 }
 
 #' HTML dependency for the prose block JS/CSS

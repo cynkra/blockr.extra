@@ -4,9 +4,9 @@ test_that("new_prose_block constructs a text block", {
   expect_s3_class(b, "text_block")
 })
 
-test_that("prose block evaluates glue against the named data input", {
+test_that("prose block evaluates inline R against the named data input", {
   b <- new_prose_block(
-    "Rows: {nrow(data)}; mean mpg {round(mean(data$mpg), 1)}"
+    "Rows: `r nrow(data)`; mean mpg `r round(mean(data$mpg), 1)`"
   )
 
   shiny::testServer(
@@ -25,7 +25,7 @@ test_that("prose block evaluates glue against the named data input", {
   )
 })
 
-test_that("plain markdown (no glue) passes through", {
+test_that("plain markdown (no inline R) passes through", {
   b <- new_prose_block("## Title\n\nSome **bold** text.")
 
   shiny::testServer(
@@ -65,11 +65,11 @@ test_that("UI edits flow into state (text input -> reactiveVal)", {
     blockr.core:::block_expr_server(b),
     {
       session$flushReact()
-      session$setInputs(text = "## Edited\n\n{nrow(data)} rows")
+      session$setInputs(text = "## Edited\n\n`r nrow(data)` rows")
       session$flushReact()
       expect_identical(
         session$returned$state$text(),
-        "## Edited\n\n{nrow(data)} rows"
+        "## Edited\n\n`r nrow(data)` rows"
       )
     },
     args = list(...args = shiny::reactiveValues(data = mtcars))
@@ -84,18 +84,18 @@ test_that("external (AI) writes reach state, and re-render through result()", {
     blockr.core:::block_expr_server(b),
     {
       session$flushReact()
-      session$returned$state$text("Total rows: {nrow(data)}")
+      session$returned$state$text("Total rows: `r nrow(data)`")
       session$flushReact()
       expect_identical(
         session$returned$state$text(),
-        "Total rows: {nrow(data)}"
+        "Total rows: `r nrow(data)`"
       )
     },
     args = list(...args = shiny::reactiveValues(data = mtcars))
   )
 
   # A block restored with that markdown renders it (round-trip via ctor).
-  restored <- new_prose_block("Total rows: {nrow(data)}")
+  restored <- new_prose_block("Total rows: `r nrow(data)`")
   shiny::testServer(
     blockr.core:::get_s3_method("block_server", restored),
     {
@@ -130,7 +130,7 @@ last_of <- function(sent, type) {
   if (length(hits)) hits[[length(hits)]]$message else NULL
 }
 
-test_that("chip expressions evaluate individually; one failure is local", {
+test_that("inline expressions evaluate individually; one failure is local", {
   b <- new_prose_block("x")
 
   shiny::testServer(
@@ -153,7 +153,7 @@ test_that("chip expressions evaluate individually; one failure is local", {
   )
 })
 
-test_that("chip preview is dormant (ok = NA) before data arrives", {
+test_that("the value preview is dormant (ok = NA) before data arrives", {
   b <- new_prose_block("x")
 
   shiny::testServer(
@@ -171,8 +171,8 @@ test_that("chip preview is dormant (ok = NA) before data arrives", {
   )
 })
 
-test_that("glue evaluation preserves indentation and newlines (.trim = FALSE)", {
-  b <- new_prose_block("- a\n  - b\n\nRows: {nrow(data)}\n")
+test_that("evaluation keeps indentation and newlines", {
+  b <- new_prose_block("- a\n  - b\n\nRows: `r nrow(data)`\n")
 
   shiny::testServer(
     blockr.core:::get_s3_method("block_server", b),
@@ -190,8 +190,8 @@ test_that("glue evaluation preserves indentation and newlines (.trim = FALSE)", 
   )
 })
 
-test_that("doubled braces reach the result as literal braces", {
-  b <- new_prose_block("::: {{.callout-note}}\nhi\n:::")
+test_that("braces are plain text", {
+  b <- new_prose_block("::: {.callout-note}\nhi\n:::")
 
   shiny::testServer(
     blockr.core:::get_s3_method("block_server", b),
@@ -207,4 +207,16 @@ test_that("doubled braces reach the result as literal braces", {
       data = list(...args = shiny::reactiveValues(data = mtcars))
     )
   )
+})
+
+test_that("inline_r writes values in and leaves code alone", {
+  d <- list(data = mtcars)
+  expect_identical(inline_r("n = `r nrow(data)`", d), "n = 32")
+  expect_identical(inline_r("`r 1 + 1` and `code`", d), "2 and `code`")
+  expect_identical(
+    inline_r("```r\n`r nrow(data)`\n```\n`r 2 * 2`", d),
+    "```r\n`r nrow(data)`\n```\n4"
+  )
+  expect_identical(inline_r("`r letters[1:3]`"), "a, b, c")
+  expect_error(inline_r("`r no_such_thing`"), "no_such_thing")
 })

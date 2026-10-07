@@ -7,7 +7,7 @@
 new_prose_block(text = character(), ...)
 }
 \arguments{
-\item{text}{Markdown string, evaluated with \code{\link[glue:glue]{glue::glue()}}.}
+\item{text}{Markdown string, with inline R as \code{`r expr`}.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_block]{blockr.core::new_block()}}.}
 }
@@ -15,33 +15,27 @@ new_prose_block(text = character(), ...)
 A \code{prose_block} (also a \code{text_block}).
 }
 \description{
-A WYSIWYG-first text block: a rich-text editor (no markdown syntax to learn)
-backed by canonical markdown. The editor lives in the block control; the
-rendered, glue-evaluated markdown is the block result. A collapsible
-"Markdown source" field exposes the raw markdown, two-way synced with the
-editor. The \code{text} parameter is externally controllable, so an assistant
-(blockr.ai) can write the note as markdown at runtime.
+Text that can compute. The block holds markdown, edited as it reads (bold
+as bold, no syntax to learn), and R inside it the way Quarto writes inline
+code: \code{`r nrow(data)`}. Typing \verb{`r} and a space in the editor opens
+a small code field that suggests the inputs, their columns and a few common
+functions; Enter computes it, and the text shows the value, marked with a
+dotted underline. Pointing at a value shows its code, a click edits it.
 }
 \details{
-Like \code{\link[blockr.core:new_text_block]{blockr.core::new_glue_block()}}, the text is evaluated with
-\code{\link[glue:glue]{glue::glue()}} against the input data, which is bound by its input name (e.g.
-\code{data}). Reference data with \code{{nrow(data)}}, \code{{data$colname}} or
-\code{{round(mean(data$mpg), 1)}} -- a bare \code{{colname}} does not resolve. In the
-editor a reference renders as a chip showing its evaluated VALUE (the
-expression is one click away); each chip is evaluated on its own, so a typo
-in one reference marks that chip and leaves the rest of the text standing.
+The markdown with its code is the block's setting, in its control. Its
+result is the markdown with the values written in, which the next block
+takes as text (a report, a slide). Because the code is Quarto's own inline
+code, the same text runs in a Quarto document where the inputs are objects
+of the same names.
 
-Two things run on different clocks. Chip values refresh eagerly -- the
-editor sends the expressions, the server evaluates each in the same
-environment glue gets and pushes the values back -- which costs nothing in
-the DAG. The document itself commits only on blur, Ctrl-Enter or the Apply
-footer, never on a keystroke, so typing does not re-evaluate downstream
-blocks.
+Inputs are bound by their input name: a link with \code{input = "data"} makes
+\code{data} available. An expression that fails marks its value in the editor;
+in the result it stops the block with the error.
 
-Braces the author types as literal text (Quarto attributes, shortcodes) are
-escaped by the editor on the way out (doubled, glue's own escape), so the
-stored markdown stays a valid glue template with no syntax for the author to
-learn.
+Values refresh eagerly as you type, outside the DAG. The text itself
+commits on blur or Ctrl+Enter, never on a keystroke, so typing does not
+recompute the blocks downstream.
 }
 \examples{
 if (interactive()) {
@@ -50,7 +44,7 @@ if (interactive()) {
     new_board(
       blocks = list(
         data = new_dataset_block("iris", "datasets"),
-        note = new_prose_block("## Iris\n\nThere are **{nrow(data)}** rows.")
+        note = new_prose_block("## Iris\n\nThere are **`r nrow(data)`** rows.")
       ),
       links = links(from = "data", to = "note", input = "data")
     )
