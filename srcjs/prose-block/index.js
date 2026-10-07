@@ -18,8 +18,9 @@
 // edges of each as passages to the next: at an edge, the arrow keys,
 // Backspace and Delete raise `prose-edge` on the element, and a host that
 // handles it cancels the event. A "/" typed on an empty line raises
-// `prose-slash` the same way, for the host's insert menu. `el.blockrProse`
-// is the controller, for focusAt(), join() and splitHere().
+// `prose-slash` the same way, for the host's insert menu, and an "@" at the
+// start of a word `prose-at`, for a value to put in. `el.blockrProse` is the
+// controller, for focusAt(), join(), splitHere() and insertChip().
 
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx, serializerCtx } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
@@ -139,6 +140,7 @@ class ProseBlock {
 
   _edge(ev) {
     if (ev.key === "/") return this._slash(ev);
+    if (ev.key === "@") return this._at(ev);
     if (this.field || ev.defaultPrevented || ev.shiftKey || ev.altKey || ev.metaKey || ev.ctrlKey || ev.isComposing) return;
     const view = this._view();
     if (!view) return;
@@ -184,6 +186,43 @@ class ProseBlock {
     if (!this.el.dispatchEvent(e)) {
       ev.preventDefault();
       ev.stopPropagation();
+    }
+  }
+
+  // "@" where a word starts
+  _at(ev) {
+    if (this.field || ev.defaultPrevented || ev.altKey || ev.metaKey || ev.ctrlKey || ev.isComposing) return;
+    const view = this._view();
+    if (!view) return;
+    const sel = view.state.selection, $h = sel.$head;
+    if (!sel.empty || !$h.parent.isTextblock || $h.parent.type.spec.code) return;
+    const prev = $h.parent.textBetween(Math.max(0, $h.parentOffset - 1), $h.parentOffset, null, "\ufffc");
+    if (prev && !/\s|[(\[]/.test(prev)) return;
+    const r = view.coordsAtPos(sel.head);
+    const e = new CustomEvent("prose-at", {
+      bubbles: true,
+      cancelable: true,
+      detail: { left: r.left, top: r.top, bottom: r.bottom }
+    });
+    if (!this.el.dispatchEvent(e)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  }
+
+  // A value at the cursor: a chip with this code. `open` opens its code
+  // field, for code of your own.
+  insertChip(expr, open) {
+    const view = this._view();
+    if (!view) return;
+    const type = view.state.schema.nodes.inline_r;
+    const pos = view.state.selection.from;
+    view.dispatch(view.state.tr.replaceSelectionWith(type.create({ expr: expr })));
+    view.focus();
+    if (open) {
+      this._openField(view, pos, false);
+    } else {
+      this.text();
     }
   }
 
