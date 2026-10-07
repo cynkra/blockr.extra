@@ -312,18 +312,25 @@ class ProseBlock {
     if (this._link) { const b = this._link; this._link = null; b.remove(); }
   }
 
-  // "/" on an empty line of its own, not in a list or a quote
+  // "/" on an empty line of its own (not in a list or a quote), for what
+  // goes between the lines; or where a word starts in running text
+  // (`inline`), for what goes in the sentence. "and/or" stays text.
   _slash(ev) {
     if (this.field || ev.defaultPrevented || ev.altKey || ev.metaKey || ev.ctrlKey || ev.isComposing) return;
     const view = this._view();
     if (!view) return;
     const sel = view.state.selection, $h = sel.$head;
-    if (!sel.empty || $h.depth !== 1 || $h.parent.type.name !== "paragraph" || $h.parent.content.size) return;
+    if (!sel.empty || !$h.parent.isTextblock || $h.parent.type.spec.code) return;
+    const line = $h.depth === 1 && $h.parent.type.name === "paragraph" && !$h.parent.content.size;
+    if (!line) {
+      const prev = $h.parent.textBetween(Math.max(0, $h.parentOffset - 1), $h.parentOffset, null, "\ufffc");
+      if (prev && !/\s|[(\[]/.test(prev)) return;
+    }
     const r = view.coordsAtPos(sel.head);
     const e = new CustomEvent("prose-slash", {
       bubbles: true,
       cancelable: true,
-      detail: { left: r.left, top: r.top, bottom: r.bottom }
+      detail: { left: r.left, top: r.top, bottom: r.bottom, inline: !line }
     });
     if (!this.el.dispatchEvent(e)) {
       ev.preventDefault();
