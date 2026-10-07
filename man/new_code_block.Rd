@@ -11,7 +11,9 @@ new_code_block(
 )
 }
 \arguments{
-\item{script}{Character string of R code. \code{data} is the incoming data frame.}
+\item{script}{R code, either a single string with embedded newlines or a
+character vector of lines, which is joined with \verb{\\n}. \code{data} is the
+incoming data frame.}
 
 \item{values}{Named list of current control values, restored with a saved
 board. Values for names the script no longer declares are dropped.}
@@ -26,21 +28,38 @@ statement returns.
 \section{Inputs}{
 
 A top-level assignment whose right-hand side is a \strong{plain value} becomes a
-control on the card. Everything else is code. "Plain value" means a literal,
-or a call to \code{c()}, \code{factor()}, \code{as.Date()} or \code{as.POSIXct()}.
+control on the card, meaning a literal or a call to \code{c()}, \code{factor()},
+\code{as.Date()} or \code{as.POSIXct()}. Everything else is code.
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{species <- factor("setosa", unique(data$Species))   # a dropdown
-n <- 10                                             # a number box
-desc <- TRUE                                        # a checkbox
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{.vars <- intersect(c("AGE", "SEX", "TRT"), names(data))  # private, no control
+
+vars <- factor(.vars, levels = .vars)                # a multi-select
+species <- factor("setosa", unique(data$Species))    # a dropdown
+n <- 10                                              # a number box
+desc <- TRUE                                         # a checkbox
 
 data |>
-  dplyr::filter(Species == species) |>
+  dplyr::filter(Species \%in\% species) |>
   dplyr::slice_head(n = n)
 }\if{html}{\out{</div>}}
 
-There is no fenced region and no marker comment. An input is a \emph{kind of
-line}, not a \emph{place in the script}, so a line is classified on its own and
-the editor paints the ones that became controls.
+There is no fenced region, no marker comment and no header. An input is a
+\emph{kind of line}, not a \emph{place in the script}, so a line is read on its own
+wherever it sits and the editor paints the ones that became controls.
+}
+
+\section{Keeping a line to yourself}{
+
+\strong{A name starting with a dot is never a control.} It is R's own convention
+for something internal, and here it is the escape hatch: a line that works
+something out from the data, or holds a list you only use to build a choice
+list, says so by starting with a dot. It is still an ordinary variable the
+rest of the script can read, and it is only evaluated if something reads it.
+
+One other line gets no control, and the editor footer names it because a
+knob quietly not appearing is worth a word: a name the script assigns again.
+The knob's value would be thrown away, so only the last assignment can be
+the control.
 
 A \strong{factor} is how a select is expressed without any blockr vocabulary: its
 levels are the choice list, and the length of its value decides single or
@@ -59,9 +78,23 @@ no \code{local({...})} wrapper and no \verb{.fn <- function(data, ...)} sandwich
 \link{code-block-expr}.
 }
 
+\section{Saved as lines}{
+
+A saved board writes the script as a JSON array, one element per line, so
+that editing a script shows up in a git diff as the lines that changed
+rather than as one long replaced string. Both forms are accepted on the way
+back in: a one-element string with embedded newlines (every board saved
+before this) and a character vector of lines, which is joined with \verb{\\n}.
+}
+
 \examples{
 blk <- new_code_block(
   script = "n <- 6\n\nutils::head(data, n)"
+)
+
+# the same script, one element per line
+blk <- new_code_block(
+  script = c("n <- 6", "", "utils::head(data, n)")
 )
 
 }

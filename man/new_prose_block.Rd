@@ -52,7 +52,7 @@ if (interactive()) {
         data = new_dataset_block("iris", "datasets"),
         note = new_prose_block("## Iris\n\nThere are **{nrow(data)}** rows.")
       ),
-      links = links(from = "data", to = "note")
+      links = links(from = "data", to = "note", input = "data")
     )
   )
 }

@@ -61,6 +61,11 @@ cb_literal <- function(v) {
 #' not a variable reference, and substituting them is how naive source rewriting
 #' produces broken code.
 #'
+#' Scope is respected too. A `function()` formal rebinds the name for that
+#' body, so the substitution stops at the boundary; a `for` variable rebinds it
+#' in the same environment, so the declaration is demoted to code instead (see
+#' [cb_shadowed()]).
+#'
 #' @param e An expression.
 #' @param subs A named list of replacement nodes.
 #' @noRd
@@ -75,6 +80,39 @@ cb_subst <- function(e, subs) {
   if (!is.call(e)) {
     return(e)
   }
+  # `function(x) ...` opens a scope: a formal binds the name for the body, so
+  # the control of the same name is not what that body means. Substituting it
+  # would rewrite `function(data) nrow(data)` into a reference to the upstream
+  # block and quietly return the wrong number. A formal shadows for the
+  # defaults too, which R evaluates in the function's own frame.
+  if (identical(e[[1L]], quote(`function`)) && length(e) >= 3L) {
+    inner <- subs[setdiff(names(subs), names(e[[2L]]))]
+    fmls <- e[[2L]]
+    for (i in seq_along(fmls)) {
+      if (!cb_is_empty_sym(fmls[[i]])) {
+        fmls[[i]] <- cb_subst(fmls[[i]], inner)
+      }
+    }
+    e[[2L]] <- fmls
+    e[[3L]] <- cb_subst(e[[3L]], inner)
+    # The srcref would otherwise deparse the pre-substitution source.
+    if (length(e) >= 4L) {
+      e[[4L]] <- NULL
+    }
+    return(e)
+  }
+  # `x <- v`: the left side is the name being bound, not a reference to it. A
+  # demoted declaration keeps its line in the body, and if a later declaration
+  # of the same name gave it a control, substituting here would rewrite the
+  # line into `c("a", "b") <- c("a", "b")`. An indexed target (`x[i] <- v`) is
+  # a call, and the index inside it IS a value reference, so only a bare name
+  # is skipped.
+  if (length(e) == 3L && is.name(e[[2L]]) &&
+      (identical(e[[1L]], quote(`<-`)) || identical(e[[1L]], quote(`=`)) ||
+         identical(e[[1L]], quote(`<<-`)))) {
+    e[[3L]] <- cb_subst(e[[3L]], subs)
+    return(e)
+  }
   # `x$name` / `x@name`: the right side is a literal name, not a variable.
   if (length(e) == 3L &&
       (identical(e[[1L]], quote(`$`)) || identical(e[[1L]], quote(`@`)))) {
@@ -82,12 +120,23 @@ cb_subst <- function(e, subs) {
     return(e)
   }
   # Index 1 is the call head, which is never an input.
+  # A substitution that comes back NULL must NOT be assigned into the call:
+  # `e[[i]] <- NULL` DELETES the element and shortens `e`, while the loop
+  # bounds were fixed before it started. A NULL argument in last position then
+  # vanishes from the emitted code, and one anywhere else walks the loop off
+  # the end ("subscript out of bounds"), killing the block. Intentional
+  # removal has its own sentinel (CB_DROP), so NULL here only ever means "this
+  # argument is NULL", which is already what the call says.
   if (length(e) > 1L) {
     for (i in 2L:length(e)) {
       if (cb_is_empty_sym(e[[i]])) {
         next
       }
-      e[[i]] <- cb_subst(e[[i]], subs)
+      sub <- cb_subst(e[[i]], subs)
+      if (is.null(sub)) {
+        next
+      }
+      e[[i]] <- sub
     }
   }
   e
@@ -107,12 +156,17 @@ cb_fold <- function(e) {
   if (!is.call(e)) {
     return(e)
   }
+  # Same trap as cb_subst(): assigning NULL into a call deletes the element.
   if (length(e) > 1L) {
     for (i in 2L:length(e)) {
       if (cb_is_empty_sym(e[[i]])) {
         next
       }
-      e[[i]] <- cb_fold(e[[i]])
+      folded <- cb_fold(e[[i]])
+      if (is.null(folded)) {
+        next
+      }
+      e[[i]] <- folded
     }
   }
 
@@ -157,11 +211,18 @@ cb_prune <- function(e) {
       return(e[[3L]])
     }
   }
-  # Anywhere else a dropped branch really is NULL.
+  # Anywhere else a dropped branch really is NULL -- SET to NULL, which is
+  # `e[i] <- list(NULL)`. `e[[i]] <- NULL` deletes the element instead, the
+  # trap the comments in cb_subst() and cb_fold() already name. On an
+  # assignment that cost the whole right-hand side: `x <- if (FALSE) 1` became
+  # a one-argument `<-`, which DEPARSES as `x <- NULL` and throws
+  # `incorrect number of arguments to "<-"` when the block evaluates it. The
+  # script is valid R, nothing in the message or in the printed expression
+  # points at the line, and no edit to the script can fix it.
   if (length(e) > 1L) {
     for (i in 2L:length(e)) {
       if (!cb_is_empty_sym(e[[i]]) && is_drop(e[[i]])) {
-        e[[i]] <- NULL
+        e[i] <- list(NULL)
       }
     }
   }
@@ -186,6 +247,14 @@ cb_assigned_names <- function(exprs) {
     if (length(e) == 3L && is.name(e[[2L]]) &&
         (identical(e[[1L]], quote(`<-`)) || identical(e[[1L]], quote(`=`)) ||
            identical(e[[1L]], quote(`<<-`)))) {
+      found <<- c(found, as.character(e[[2L]]))
+    }
+    # A loop variable is an assignment in the same environment: after
+    # `for (n in 1:2)` plain R leaves `n` at 2, whatever it was before. So a
+    # declaration the body loops over is demoted to code like any other
+    # re-assignment, rather than being substituted into the loop head.
+    if (identical(e[[1L]], quote(`for`)) && length(e) == 4L &&
+          is.name(e[[2L]])) {
       found <<- c(found, as.character(e[[2L]]))
     }
     if (length(e) > 1L) {
@@ -222,6 +291,53 @@ cb_shadowed <- function(parsed) {
 }
 
 
+#' Which declarations are not controls after all?
+#'
+#' A declaration is a control unless the script assigns the name again, which
+#' happens two ways: a body statement writes it (the knob's value would be
+#' thrown away), or a second declaration further down replaces it (only the
+#' last one can be the control). Both are decided by reading the script,
+#' without evaluating anything.
+#'
+#' A helper line says so for itself by starting its name with a dot, so there
+#' is nothing to work out about `.lv <- unique(data$site)` feeding
+#' `site <- factor("Basel", .lv)`.
+#'
+#' @param parsed The result of [cb_parse()].
+#' @return A logical vector over `parsed$stmts`.
+#' @noRd
+cb_demoted <- function(parsed) {
+  n <- length(parsed$stmts)
+  if (!parsed$ok || !n) {
+    return(logical(n))
+  }
+  is_input <- vapply(parsed$stmts, `[[`, logical(1L), "input")
+  nms <- vapply(parsed$stmts, `[[`, character(1L), "name")
+
+  body_assigned <- cb_assigned_names(lapply(parsed$stmts[!is_input], `[[`, "expr"))
+
+  reason <- vapply(seq_len(n), function(i) {
+    if (!is_input[[i]]) {
+      return("")
+    }
+    nm <- nms[[i]]
+    if (nm %in% body_assigned) {
+      return("assigned")
+    }
+    later <- is_input & seq_len(n) > i
+    if (any(later & !is.na(nms) & nms == nm)) {
+      return("redeclared")
+    }
+    ""
+  }, character(1L))
+
+  out <- nzchar(reason)
+  attr(out, "reason") <- reason
+  attr(out, "name") <- nms
+  out
+}
+
+
 #' Compile the script into the block's expression
 #'
 #' @param parsed The result of [cb_parse()].
@@ -235,19 +351,25 @@ cb_expr <- function(parsed, specs, values = list(), data_name = "data") {
   if (!parsed$ok) {
     return(NULL)
   }
-  shadowed <- cb_shadowed(parsed)
+  demoted <- cb_demoted(parsed)
   usable <- vapply(
     specs,
-    function(s) is.null(s$error) && !is.na(s$kind) && !s$name %in% shadowed,
+    function(s) is.null(s$error) && !is.na(s$kind),
     logical(1L)
   )
   specs <- specs[usable]
 
-  body <- Filter(
-    function(st) !st$input || st$name %in% shadowed,
-    parsed$stmts
-  )
-  body <- lapply(body, `[[`, "expr")
+  # A declaration stays where it was written, as code, unless a usable control
+  # replaced it. That covers the demoted lines and, just as importantly, a
+  # declaration whose value could not be read: dropping the line while nothing
+  # substitutes the name leaves the expression referring to a symbol that does
+  # not exist.
+  live <- vapply(specs, `[[`, character(1L), "name")
+  keep <- vapply(seq_along(parsed$stmts), function(i) {
+    st <- parsed$stmts[[i]]
+    !st$input || demoted[[i]] || !st$name %in% live
+  }, logical(1L))
+  body <- lapply(parsed$stmts[keep], `[[`, "expr")
   if (!length(body)) {
     return(NULL)
   }

@@ -33,6 +33,7 @@ import { StreamLanguage, syntaxHighlighting, defaultHighlightStyle, indentUnit, 
 import { r } from "@codemirror/legacy-modes/mode/r";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
+import { search, searchKeymap } from "@codemirror/search";
 
 (() => {
   "use strict";
@@ -325,15 +326,24 @@ import { unifiedMergeView, getChunks, getOriginalDoc } from "@codemirror/merge";
         inputDecorations,
         inputGutter,
         mergeCompartment.of([]),
+        // Mod-f inside the editor opens CodeMirror's own search bar: the
+        // browser's find only sees the lines CodeMirror has drawn.
+        search({ top: true }),
         keymap.of([
           { key: "Mod-Enter", run: () => { runNow(); return true; } },
-          ...defaultKeymap, ...historyKeymap, ...completionKeymap, indentWithTab
+          ...defaultKeymap, ...historyKeymap, ...completionKeymap,
+          ...searchKeymap, indentWithTab
         ]),
         updateListener,
         EditorView.lineWrapping
       ]
     });
     view = new EditorView({ state, parent: el });
+    // An Escape the editor used (closing the search bar or a completion)
+    // stops at the editor, so the gear tray around it stays open.
+    view.dom.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && e.defaultPrevented) e.stopPropagation();
+    });
     const initial = readMarks(el);
     if (initial.length) {
       view.dispatch({ effects: setInputMarks.of(initial) });

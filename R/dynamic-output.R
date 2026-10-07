@@ -116,7 +116,94 @@ is_html_renderable <- function(x) {
 #' @param session Shiny session
 #' @return A shiny.render.function (renderUI)
 #' @noRd
+#' House styling for a gt table, applied at RENDER time
+#'
+#' Three properties, and all of them are about the app's chrome rather than
+#' about the table. gt sizes itself to its content, centres itself
+#' (`margin-left: auto`) and ships its own font stack (`system-ui, 'Segoe UI',
+#' Roboto, ...`), so a gt table lands in a blockr panel looking like a visitor:
+#' a narrow slab adrift in the middle of a card, set in a different typeface
+#' from everything around it. A panel is a box the user sized on purpose, so
+#' the table takes the width it was given; `"inherit"` hands the type back to
+#' the panel's CSS, which is the board's theme.
+#'
+#' Width does the work that alignment only half did: at `pct(100)` the table
+#' fills the card and there is no slack left to align within. `table.align`
+#' stays anyway, for the case where a caption or a narrow column keeps the
+#' table under full width.
+#'
+#' DELIBERATELY NOT IN THE BLOCK'S SCRIPT. A code block's script is the code it
+#' EXPORTS, so `gt::tab_options()` written there would travel into the reader's
+#' document and impose our house style on theirs. Same reason `as_gt()` is
+#' here: how a thing draws in our app is our business, and the exported call
+#' should stay the call a statistician would have typed.
+#'
+#' The cost, named: this runs on the finished object, so a script that sets
+#' width, alignment or a font on purpose is overridden. Those three are the
+#' only properties taken; colours, borders, spanners, footnotes and the rest
+#' of gt are left exactly as the author left them.
+#'
+#' @param x A `gt_tbl`.
+#' @return The `gt_tbl`, restyled; unchanged if gt is unavailable.
+#' @noRd
+gt_house_style <- function(x) {
+  if (!requireNamespace("gt", quietly = TRUE)) {
+    return(x)
+  }
+  tryCatch(
+    gt::tab_options(
+      x,
+      table.width = gt::pct(100),
+      table.align = "left",
+      table.font.names = "inherit",
+      table.font.size = "inherit"
+    ),
+    error = function(e) x
+  )
+}
+
 render_dynamic_output <- function(result, block, session) {
+  # A NULL RESULT PAINTS NOTHING. Everything below ends at `print()` as
+  # preformatted text for an object no branch claims, and printing NULL puts
+  # the word NULL on the card.
+  #
+  # It is not a result the user wrote. blockr.core hands one down whenever the
+  # block is momentarily outside the eval set -- `res()` returns NULL early
+  # while `block_ready()`, which gates the render observer, does not test
+  # `needed()` (blockr.core R/block-server.R). A view switch lands a block's
+  # visibility across several flushes, so a block already on screen takes that
+  # round trip and its output is rendered from the NULL. On a slow connection
+  # the two paints arrive as two messages and the table is preceded by the
+  # word NULL for a fraction of a second.
+  #
+  # A block that genuinely returns NULL paints nothing too, which is the same
+  # thing the table block does with it (an empty frame, drawn empty).
+  if (is.null(result)) {
+    return(shiny::renderUI(NULL))
+  }
+
+  # A GTSUMMARY TABLE IS A DESCRIPTION OF A TABLE, NOT A RENDERED ONE. Its
+  # HTML comes from gt, reached through `gtsummary::as_gt()`, so it has no
+  # `as.tags` method of its own and would otherwise fall through to
+  # `print()` as preformatted text.
+  #
+  # Converted HERE and not in the block's script on purpose: the script a
+  # code block holds is also the code it EXPORTS, so a wrapper written only
+  # to satisfy this renderer would travel into the exported document with
+  # it. `gtsummary::tbl_summary(data, by = AREA)` is the line a statistician
+  # writes and the line the report should carry; making it draw is this
+  # function's job, not the author's.
+  if (inherits(result, "gtsummary") &&
+        requireNamespace("gtsummary", quietly = TRUE)) {
+    result <- tryCatch(gtsummary::as_gt(result), error = function(e) result)
+  }
+
+  # Any gt table, however it got here -- a gtsummary above, a `gt::gt()` in a
+  # code block, a sibling package's builder.
+  if (inherits(result, "gt_tbl")) {
+    result <- gt_house_style(result)
+  }
+
   # Data frames follow the board's chosen tabular display, so a function block
   # previews its result the same way the data and transform blocks around it
   # do. Only the HTML table can be honored here, and the reason is the

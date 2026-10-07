@@ -3,11 +3,14 @@
 \name{blockr_code_dep}
 \alias{blockr_code_dep}
 \alias{code_block_css_dep}
+\alias{gear_editor_dep}
 \title{HTML dependency for the Blockr.Code editor (CodeMirror 6 bundle)}
 \usage{
 blockr_code_dep()
 
 code_block_css_dep()
+
+gear_editor_dep()
 }
 \value{
 An \code{\link[htmltools:htmlDependency]{htmltools::htmlDependency()}}.

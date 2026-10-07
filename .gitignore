@@ -2,3 +2,5 @@
 
 node_modules/
 .claude/
+
+tests/testthat/_problems/

@@ -138,15 +138,12 @@ create_input_for_arg <- function(arg_name, default, ns, strip_leading_dot = FALS
 
   # Handle missing defaults (arguments without default values)
   if (identical(default, quote(expr = ))) {
-    return(shiny::div(
-      class = "block-input-wrapper",
-      shiny::textInput(
-        inputId = input_id,
-        label = label,
-        value = "",
-        placeholder = "No default"
-      )
-    ))
+    return(fb_field_wrapper("text", shiny::textInput(
+      inputId = input_id,
+      label = label,
+      value = "",
+      placeholder = "No default"
+    )))
   }
 
   # Evaluate the default if it's a call/expression
@@ -155,74 +152,70 @@ create_input_for_arg <- function(arg_name, default, ns, strip_leading_dot = FALS
     error = function(e) default
   )
 
-  shiny::div(
-    class = "block-input-wrapper",
-    if (is.list(default_val) && !is.data.frame(default_val)) {
-      # list() -> multi-select via the shared Blockr.Select component.
-      choices <- unlist(default_val)
-      fb_select_input(
-        input_id = input_id,
-        label = label,
-        choices = choices,
-        selected = unname(choices),
-        multiple = TRUE
-      )
-    } else if (is.character(default_val) && length(default_val) > 1) {
-      # c() with multiple values -> single Blockr.Select.
-      fb_select_input(
-        input_id = input_id,
-        label = label,
-        choices = default_val,
-        selected = unname(default_val[1]),
-        multiple = FALSE
-      )
-    } else if (is.numeric(default_val) && length(default_val) > 1) {
-      # Numeric vector -> single Blockr.Select.
-      fb_select_input(
-        input_id = input_id,
-        label = label,
-        choices = default_val,
-        selected = unname(default_val[1]),
-        multiple = FALSE
-      )
-    } else if (is.numeric(default_val) && length(default_val) == 1) {
-      # Single numeric -> numericInput
-      shiny::numericInput(
-        inputId = input_id,
-        label = label,
-        value = default_val
-      )
-    } else if (is.logical(default_val) && length(default_val) == 1) {
-      # Single logical -> checkboxInput
-      shiny::checkboxInput(
-        inputId = input_id,
-        label = label,
-        value = default_val
-      )
-    } else if (is.character(default_val) && length(default_val) == 1) {
-      # Single character -> textInput
-      shiny::textInput(
-        inputId = input_id,
-        label = label,
-        value = default_val
-      )
-    } else if (is.null(default_val)) {
-      # NULL default -> textInput (common for .id parameters)
-      shiny::textInput(
-        inputId = input_id,
-        label = label,
-        value = "",
-        placeholder = "NULL (leave empty)"
-      )
-    } else {
-      # Fallback: show as text
-      shiny::textInput(
-        inputId = input_id,
-        label = paste(label, "(unsupported type)"),
-        value = if (is.null(default_val)) "" else as.character(default_val)[1]
-      )
-    }
-  )
+  # The kind travels with the control: the band lays fields out by what they
+  # hold, so a select and a checkbox cannot be given the same share of the row.
+  if (is.list(default_val) && !is.data.frame(default_val)) {
+    # list() -> multi-select via the shared Blockr.Select component.
+    choices <- unlist(default_val)
+    fb_field_wrapper("select", fb_select_input(
+      input_id = input_id,
+      label = label,
+      choices = choices,
+      selected = unname(choices),
+      multiple = TRUE
+    ))
+  } else if (is.character(default_val) && length(default_val) > 1) {
+    # c() with multiple values -> single Blockr.Select.
+    fb_field_wrapper("select", fb_select_input(
+      input_id = input_id,
+      label = label,
+      choices = default_val,
+      selected = unname(default_val[1]),
+      multiple = FALSE
+    ))
+  } else if (is.numeric(default_val) && length(default_val) > 1) {
+    # Numeric vector -> single Blockr.Select.
+    fb_field_wrapper("select", fb_select_input(
+      input_id = input_id,
+      label = label,
+      choices = default_val,
+      selected = unname(default_val[1]),
+      multiple = FALSE
+    ))
+  } else if (is.numeric(default_val) && length(default_val) == 1) {
+    fb_field_wrapper("number", shiny::numericInput(
+      inputId = input_id,
+      label = label,
+      value = default_val
+    ))
+  } else if (is.logical(default_val) && length(default_val) == 1) {
+    fb_field_wrapper("flag", shiny::checkboxInput(
+      inputId = input_id,
+      label = label,
+      value = default_val
+    ))
+  } else if (is.character(default_val) && length(default_val) == 1) {
+    fb_field_wrapper("text", shiny::textInput(
+      inputId = input_id,
+      label = label,
+      value = default_val
+    ))
+  } else if (is.null(default_val)) {
+    # NULL default -> textInput (common for .id parameters)
+    fb_field_wrapper("text", shiny::textInput(
+      inputId = input_id,
+      label = label,
+      value = "",
+      placeholder = "NULL (leave empty)"
+    ))
+  } else {
+    # Fallback: show as text
+    fb_field_wrapper("text", shiny::textInput(
+      inputId = input_id,
+      label = paste(label, "(unsupported type)"),
+      value = if (is.null(default_val)) "" else as.character(default_val)[1]
+    ))
+  }
 }
 
 
@@ -355,13 +348,10 @@ output$dynamic_params <- shiny::renderUI({
     )
   })
 
-  # Column count = number of fields, capped at 3, so 2 fields fill the row
-  # (50/50) rather than leaving an empty trailing column. Container queries
-  # only ever step this *down* on narrow panels.
-  n_cols <- min(length(ui_elements), 3L)
+  band <- fb_grid_track(vapply(ui_elements, fb_field_kind, character(1L)))
   shiny::div(
-    class = "fb-params-grid",
-    style = sprintf("--fb-cols:%d;", n_cols),
+    class = paste("fb-params-grid", band$class),
+    style = band$style,
     ui_elements
   )
 })
@@ -407,4 +397,84 @@ list(
   r_version = r_version,
   get_param_values = get_param_values
 )
+}
+
+
+#' The kind a wrapped field declares
+#'
+#' The function block builds its fields one at a time and only then knows what
+#' the band holds, so the kind is read back off the wrapper rather than
+#' threaded through every branch.
+#'
+#' @param field A field built by [fb_field_wrapper()].
+#' @noRd
+fb_field_kind <- function(field) {
+  cls <- field$attribs$class
+  if (is.null(cls)) {
+    return(NA_character_)
+  }
+  hit <- regmatches(cls, regexpr("fb-field--[a-z]+", cls))
+  if (!length(hit)) NA_character_ else sub("fb-field--", "", hit)
+}
+
+
+#' Which ladder the band steps down, and its clamped column counts
+#'
+#' Equal tracks keep the fields aligned; what the band has to choose is where
+#' the column count steps down, and that depends on what it holds. A select
+#' needs room for its tags, a number or a flag does not, and a band with both
+#' should be laid out for the select: at a half-width panel that is two columns
+#' where the old ladder insisted on four and gave each select 154px.
+#'
+#' The counts are clamped to the number of fields for the same reason they
+#' always were: a two-field band widened into three tracks leaves an empty one.
+#'
+#' @param kinds The field kinds in the band.
+#' @return A list with the band's modifier class and its inline style.
+#' @noRd
+fb_grid_track <- function(kinds) {
+  n <- length(kinds)
+  list(
+    class = if (any(kinds %in% c("select", "text"))) {
+      "fb-band--wide"
+    } else {
+      "fb-band--knobs"
+    },
+    style = sprintf(
+      "--fb-cols:%d; --fb-cols-3:%d; --fb-cols-2:%d;",
+      min(n, 4L), min(n, 3L), min(n, 2L)
+    )
+  )
+}
+
+
+#' Wrap one generated field, declaring what kind of control it holds
+#'
+#' The band is a flex row rather than a grid of equal columns (see
+#' `fb-params-grid` in code-block.css): a select asks for the width its tags
+#' need, a number or a flag asks for much less, and what is left over is shared
+#' out in proportion. That only works if the markup says which is which, so the
+#' kind travels as a class rather than being guessed from the contents with
+#' `:has()`, which in a Shiny page restyles the whole document.
+#'
+#' A checkbox carries its own label beside the box, so it gets an empty label
+#' row as a spacer: without it the control starts 23px above its neighbours and
+#' the row stops lining up.
+#'
+#' @param kind One of `select`, `number`, `text`, `flag`, `date`.
+#' @param inner The control.
+#' @noRd
+fb_field_wrapper <- function(kind, inner) {
+  spacer <- if (identical(kind, "flag")) {
+    shiny::tags$label(
+      class = "fb-field-label fb-field-label--spacer",
+      `aria-hidden` = "true",
+      shiny::HTML("&nbsp;")
+    )
+  }
+  shiny::div(
+    class = paste0("block-input-wrapper fb-field--", kind),
+    spacer,
+    inner
+  )
 }

@@ -15,7 +15,6 @@ register_extra_blocks <- function() {
       "new_broom_summary_block",
       "new_compare_block",
       "new_search_block",
-      "new_latest_block",
       "new_labeler_block",
       "new_prose_block"
     ),
@@ -27,24 +26,21 @@ register_extra_blocks <- function() {
       "Broom Summary",
       "Compare",
       "Search",
-      "Latest",
       "Labeler",
       "Prose"
     ),
     description = c(
       "Transform data with a custom R function in a CodeMirror editor (syntax highlighting, autocomplete, inline AI diff). UI auto-generated from function arguments.",
-      "Transform data with a plain R script (no wrapper function). Top-level assignments of plain values become controls: a factor renders a dropdown over its levels, a number a spin box, TRUE/FALSE a checkbox. Exports as idiomatic R with the current values written in.",
+      "Transform data with a plain R script (no wrapper function). Top-level assignments of plain values become controls: a factor renders a dropdown over its levels, a number a spin box, TRUE/FALSE a checkbox. A name starting with a dot stays private. Exports as idiomatic R with the current values written in.",
       "Transform multiple data frames (...) with a custom R function. UI auto-generated from function arguments.",
       "Transform data with a custom R function asynchronously. Requires mirai daemons. Click Run to execute.",
       "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
       "Compare two data frames on key columns and compute diff metrics on measurement columns.",
       "Filter rows by case-insensitive substring match across all columns.",
-      "Forward the value of whichever variadic input most recently changed (latest-wins merge / switch). Bridges multiple drill-down charts into one downstream block.",
       "Add or edit column labels (the `attr(col, \"label\")` attribute shown in column pickers and table headers). Empty label removes it.",
       "Rich-text (WYSIWYG) markdown notes with glue data interpolation. Data references in braces render as live value chips."
     ),
     category = c(
-      "transform",
       "transform",
       "transform",
       "transform",
@@ -63,7 +59,6 @@ register_extra_blocks <- function() {
       "clipboard-data",
       "arrow-left-right",
       "search",
-      "shuffle",
       "tag",
       "card-text"
     ),
@@ -93,7 +88,13 @@ register_extra_blocks <- function() {
         "`site <- factor(\"Basel\", unique(data$site))`. A literal is always the",
         "VALUE, never the choice list.",
         "\n\nEverything else is code: an assignment whose right-hand side is a",
-        "pipe or any other call is a local variable, not a control.",
+        "pipe or any other call is a local variable, not a control. A",
+        "declaration is also NOT a control when the script assigns the same name",
+        "again (only the last assignment can be one).",
+        "\n\nA name starting with a DOT is never a control. Use that for a line",
+        "that works something out from the data, e.g.",
+        "`.vars <- intersect(c(\"AGE\", \"SEX\"), names(data))` above",
+        "`vars <- factor(.vars, levels = .vars)`.",
         "\n\nR coding rules: prefer dplyr/tidyr chained with the base pipe |>",
         "(never %>%). Namespace-prefix every call except base and stats",
         "(dplyr::filter(), tidyr::pivot_longer())."
@@ -111,8 +112,6 @@ register_extra_blocks <- function() {
       # new_compare_block:
       "",
       # new_search_block:
-      "",
-      # new_latest_block:
       "",
       # new_labeler_block:
       paste(
@@ -190,8 +189,6 @@ register_extra_blocks <- function() {
       # new_compare_block:
       NULL,
       # new_search_block:
-      NULL,
-      # new_latest_block:
       NULL,
       # new_labeler_block:
       # `labels` is an arbitrary-key map (column name -> label), which has

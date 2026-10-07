@@ -1,14 +1,16 @@
 #' The inputs layer of the code block
 #'
 #' The code block's script is ordinary R. A top-level assignment whose
-#' right-hand side is a *plain value* becomes a control on the card; every other
-#' statement is code. "Plain value" means a literal, or a call to one of a short
-#' allowlist ([CB_VALUE_CALLS]) — decidable by reading the line, without
-#' evaluating anything.
+#' right-hand side is a *plain value* ([CB_VALUE_CALLS]) becomes a control on
+#' the card; every other statement is code. A name starting with a dot is
+#' never a control, which is how a line that happens to look like a
+#' declaration says it is scaffolding.
 #'
-#' There is deliberately no fenced region and no marker comment: an input is a
-#' *kind of line*, not a *place in the script*, so nothing has to be delimited
-#' and nothing can be mis-delimited. The editor paints the lines that became
+#' Both are decidable by reading the line, without evaluating anything and
+#' without regard to where in the script it sits. There is deliberately no
+#' fenced region, no marker comment and no header: an input is a *kind of
+#' line*, not a *place in the script*, so nothing has to be delimited and
+#' nothing can be mis-delimited. The editor paints the lines that became
 #' controls (see `blockr-code-inputs` in `srcjs/code-block/index.js`), which is
 #' what tells the user which lines are special.
 #'
@@ -47,12 +49,13 @@ CB_GLYPHS <- c(select = "\u25be", number = "#", text = "Aa", flag = "\u2713",
                date = "\u25a4")
 
 
-#' Is this statement an input declaration?
+#' Is this statement an assignment to a bare name?
+#'
+#' The shape a declaration has to have, whether or not it turns out to be one.
 #'
 #' @param e A top-level expression from [parse()].
-#' @return `TRUE` for `name <- <plain value>`.
 #' @noRd
-cb_is_input_stmt <- function(e) {
+cb_is_assign_stmt <- function(e) {
   if (!is.call(e) || length(e) != 3L) {
     return(FALSE)
   }
@@ -60,7 +63,34 @@ cb_is_input_stmt <- function(e) {
   if (!identical(op, quote(`<-`)) && !identical(op, quote(`=`))) {
     return(FALSE)
   }
-  if (!is.name(e[[2L]])) {
+  is.name(e[[2L]])
+}
+
+
+#' Is this a name the block keeps to itself?
+#'
+#' The escape hatch, and it is the one R already has: a leading dot means
+#' internal. `ls()` hides those names, so does a file manager, and so does
+#' this. It is how a line that would otherwise be read as a knob says it is
+#' scaffolding for the knobs around it.
+#'
+#' @param name A variable name.
+#' @noRd
+cb_is_private_name <- function(name) {
+  !is.na(name) && startsWith(name, ".")
+}
+
+
+#' Is this statement an input declaration?
+#'
+#' @param e A top-level expression from [parse()].
+#' @return `TRUE` for `name <- <plain value>`, the name not starting with a dot.
+#' @noRd
+cb_is_input_stmt <- function(e) {
+  if (!cb_is_assign_stmt(e)) {
+    return(FALSE)
+  }
+  if (cb_is_private_name(as.character(e[[2L]]))) {
     return(FALSE)
   }
   cb_is_value_rhs(e[[3L]])
@@ -199,6 +229,14 @@ cb_annotation <- function(line_text) {
 #' whose user narrows it to one pick must stay a multi-select, so `multiple` is
 #' fixed by the script.
 #'
+#' Exactly one pick declares a single select; anything else declares a
+#' multi-select. **Zero is deliberately on the multi side**, so a script can
+#' offer a set of choices with nothing chosen yet
+#' (`factor(character(0), levels = lv)`). Reading it as a single select instead
+#' would leave no way to write "pick any number of these, starting from none" —
+#' the declaration's length is the only signal available, and a one-element
+#' default is not always wanted.
+#'
 #' @param v The evaluated right-hand side.
 #' @return A list with `kind`, and for selects `choices` and `multiple`; `NULL`
 #'   when the value maps to no widget.
@@ -206,7 +244,7 @@ cb_annotation <- function(line_text) {
 cb_widget_for <- function(v) {
   if (is.factor(v)) {
     return(list(kind = "select", choices = levels(v),
-                multiple = length(v) > 1L))
+                multiple = length(v) != 1L))
   }
   if (inherits(v, "Date")) {
     return(list(kind = "date"))
@@ -237,6 +275,12 @@ cb_widget_for <- function(v) {
 #' `lv <- unique(data$site)` is available to a later `factor(x, lv)` without the
 #' pipeline above it ever being run.
 #'
+#' A statement that is not an assignment cannot be bound lazily, so the ones
+#' *above the last declaration* are simply run: a preamble that works the
+#' grouping column out with an `if` has to have happened before the
+#' declarations under it are evaluated. Nothing below the last declaration is
+#' touched, which is where the pipeline lives.
+#'
 #' @param parsed The result of [cb_parse()].
 #' @param data The upstream data frame (may be `NULL` before it arrives).
 #' @return A list of spec records.
@@ -247,17 +291,25 @@ cb_specs <- function(parsed, data = NULL) {
   }
 
   env <- blockr.core::eval_env(list(data = data))
+  is_input <- vapply(parsed$stmts, `[[`, logical(1L), "input")
+  last_decl <- if (any(is_input)) max(which(is_input)) else 0L
+  # A declaration the script uses as scaffolding is not a knob: it is bound
+  # like any other helper line and no control is offered. See cb_demoted().
+  demoted <- cb_demoted(parsed)
   specs <- list()
 
-  for (st in parsed$stmts) {
-    if (!st$input) {
+  for (i in seq_along(parsed$stmts)) {
+    st <- parsed$stmts[[i]]
+    if (!st$input || demoted[[i]]) {
       # Bind other assignments lazily: only forced if a later declaration
       # actually reads them.
-      if (is.call(st$expr) && length(st$expr) == 3L &&
-          (identical(st$expr[[1L]], quote(`<-`)) ||
-             identical(st$expr[[1L]], quote(`=`))) &&
-          is.name(st$expr[[2L]])) {
+      if (cb_is_assign_stmt(st$expr)) {
         cb_delay(env, as.character(st$expr[[2L]]), st$expr[[3L]])
+      } else if (i < last_decl) {
+        # Not an assignment, so there is nothing to defer. A declaration below
+        # it may depend on what it does, and it fails on its own account when
+        # the block runs, so a failure here is not reported twice.
+        try(eval(st$expr, env), silent = TRUE)
       }
       next
     }
@@ -333,14 +385,35 @@ cb_delay <- function(env, name, expr) {
   # bound; script order wins, and `makeActiveBinding()` refuses to shadow a
   # regular binding. (`exists()` would force an active binding, so check the
   # names directly.)
+  #
+  # `x <- f(x)` is ordinary R and reads the OLD `x`, so the old binding is
+  # carried into a child environment the new one evaluates in. Without that,
+  # the binding reads itself and the declaration below it dies with "infinite
+  # recursion" instead of seeing the narrowed value.
+  where <- env
   if (name %in% ls(env, all.names = TRUE)) {
+    where <- new.env(parent = env)
+    if (bindingIsActive(name, env)) {
+      makeActiveBinding(name, activeBindingFunction(name, env), where)
+    } else {
+      assign(name, get(name, envir = env, inherits = FALSE), envir = where)
+    }
     rm(list = name, envir = env)
   }
+  # The binding has to accept a write too: assigning over an active binding
+  # CALLS it with the new value, so a nullary function dies with "unused
+  # argument" the moment a later declaration of the same name is evaluated
+  # into this environment.
   makeActiveBinding(
     name,
-    function() {
+    function(v) {
+      if (!missing(v)) {
+        cached <<- v
+        forced <<- TRUE
+        return(invisible(v))
+      }
       if (!forced) {
-        cached <<- eval(expr, env)
+        cached <<- eval(expr, where)
         forced <<- TRUE
       }
       cached
@@ -451,7 +524,7 @@ cb_input_ui <- function(spec, ns, value = NULL) {
   if (is.null(inner)) {
     return(NULL)
   }
-  shiny::div(class = "block-input-wrapper", inner)
+  fb_field_wrapper(spec$kind, inner)
 }
 
 
@@ -467,9 +540,13 @@ cb_params_ui <- function(specs, ns, values = list()) {
   if (!length(fields)) {
     return(NULL)
   }
+  # Read the kinds back off the fields that survived, not off `ok`: a spec can
+  # produce no control, and the band's track floor has to describe what is
+  # actually in it.
+  band <- fb_grid_track(vapply(fields, fb_field_kind, character(1L)))
   shiny::div(
-    class = "fb-params-grid",
-    style = sprintf("--fb-cols:%d;", min(length(fields), 3L)),
+    class = paste("fb-params-grid", band$class),
+    style = band$style,
     fields
   )
 }
@@ -506,7 +583,7 @@ cb_mark_title <- function(s) {
   switch(
     s$kind,
     select = sprintf(
-      "%s-select · %d choice%s",
+      "%s-select \u00b7 %d choice%s",
       if (isTRUE(s$multiple)) "multi" else "single",
       length(s$choices), if (length(s$choices) == 1L) "" else "s"
     ),
@@ -528,6 +605,10 @@ cb_mark_title <- function(s) {
 #' glyph; the real specs (choices, multiplicity, defaults) still come from
 #' [cb_specs()] on the committed script.
 #'
+#' Re-assignment is syntactic too, so a declaration the script overwrites
+#' further down gets no band either: what the editor paints and what turns into
+#' a control are the same set of lines.
+#'
 #' @param text The script (usually the live editor text).
 #' @return The same mark records [cb_editor_marks()] produces.
 #' @noRd
@@ -538,8 +619,10 @@ cb_syntactic_marks <- function(text) {
   }
   title <- c(select = "select", number = "number", text = "text",
              flag = "checkbox", date = "date")
-  marks <- lapply(parsed$stmts, function(st) {
-    if (!st$input || is.na(st$line)) {
+  demoted <- cb_demoted(parsed)
+  marks <- lapply(seq_along(parsed$stmts), function(i) {
+    st <- parsed$stmts[[i]]
+    if (!st$input || is.na(st$line) || demoted[[i]]) {
       return(NULL)
     }
     kind <- cb_kind_syntactic(st$expr[[3L]])

@@ -139,13 +139,16 @@
   border: 1px solid #c3d6fb;
 }
 .blockr-code-footer .blockr-code-btn--run:hover { background: #dce8fc; }
-/* Muted return-glyph keyboard hint on the Run button (full shortcut on hover
- * via the button's title). */
+/* Muted keyboard hint on the Run button: Cmd+Enter on a Mac (html.blockr-mac,
+ * set by gear-editor.js), Ctrl+Enter elsewhere. */
 .blockr-code-footer .blockr-code-kbd {
   margin-left: 5px;
   opacity: 0.55;
   font-size: 0.95em;
 }
+.blockr-code-footer .blockr-code-kbd--mac,
+.blockr-mac .blockr-code-footer .blockr-code-kbd--pc { display: none; }
+.blockr-mac .blockr-code-footer .blockr-code-kbd--mac { display: inline; }
 /* Disabled Run = pending edit has a syntax error: can't be run. */
 .blockr-code-footer .blockr-code-btn--run:disabled,
 .blockr-code-footer .blockr-code-btn--run[disabled] {
@@ -164,30 +167,83 @@
  * width (set by the dock panel), not the viewport — same idiom as blockr.dplyr. */
 .function-block-container { width: 100%; padding-bottom: 10px; container-type: inline-size; }
 
-/* Params grid — fixed column counts (not auto-fit), so an odd leftover field
- * keeps its column share instead of stretching to full width. A single field
- * spans the full row; wide blocks step up to 3 columns, narrow ones collapse
- * to a single stacked column. */
 .function-block-params { margin-bottom: 8px; }
 
-/* Params grid. Column count is driven by `--fb-cols` (set from R to the field
- * count, capped at 3) so N fields never leave an empty trailing column — 2
- * fields fill the row 50/50. Fixed tracks (not auto-fit) mean an odd leftover
- * keeps its column share instead of stretching to full width. Container
- * queries only ever step the count *down* on narrower panels. */
+/* --- The params band -------------------------------------------------------
+ * Equal tracks, so the fields line up down the band and across its rows, and a
+ * column count that steps down as the panel narrows. What changed is WHERE it
+ * steps: the old ladder was set by a 150px track, which is right for a number
+ * or a flag and far too tight for a select, so a half-width panel kept four
+ * columns and gave each select 154px, where the overflow chip is all that
+ * fits. Four tidy boxes saying nothing about what is selected.
+ *
+ * So the band picks its ladder from what it holds (fb_grid_track()). A band
+ * with a select or a text steps at a 220px track, which is two columns where
+ * the old grid insisted on four; a band of knobs keeps the 150px one. The
+ * counts are clamped per band (`--fb-cols*`), so a two-field band is never
+ * widened into a row with an empty trailing track. */
 .fb-params-grid {
   display: grid;
-  gap: 12px 12px;
-  grid-template-columns: repeat(var(--fb-cols, 2), minmax(0, 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(var(--fb-cols, 4), minmax(0, 1fr));
 }
-.fb-params-grid > .block-input-wrapper:only-child {
-  grid-column: 1 / -1;
+
+/* Knobs only: a 150px track, so the steps are at 4 / 3 / 2 of one plus the
+ * 12px gaps. Unchanged from the old ladder, which was built for these. */
+@container (max-width: 636px) {
+  .fb-band--knobs { grid-template-columns: repeat(var(--fb-cols-3, 3), minmax(0, 1fr)); }
 }
-@container (max-width: 620px) {
-  .fb-params-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container (max-width: 474px) {
+  .fb-band--knobs { grid-template-columns: repeat(var(--fb-cols-2, 2), minmax(0, 1fr)); }
 }
-@container (max-width: 360px) {
-  .fb-params-grid { grid-template-columns: 1fr; }
+@container (max-width: 312px) {
+  .fb-band--knobs { grid-template-columns: 1fr; }
+}
+
+/* Anything holding tags or a sentence. Not one track width but a rising one: a
+ * third and a fourth column are added only once every column would still be
+ * 330px, so a wide panel spends its width on the controls before it spends it
+ * on columns. The two-column step is the exception, at 220px, because two
+ * narrow columns still read better than one wide one.
+ *
+ * Measured on a nine-field band: 1768px is four columns of 430, 1103px three
+ * of 359, 703px two of 346, 453px two of 220. */
+@container (max-width: 1356px) {
+  .fb-band--wide { grid-template-columns: repeat(var(--fb-cols-3, 3), minmax(0, 1fr)); }
+}
+@container (max-width: 1014px) {
+  .fb-band--wide { grid-template-columns: repeat(var(--fb-cols-2, 2), minmax(0, 1fr)); }
+}
+@container (max-width: 452px) {
+  .fb-band--wide { grid-template-columns: 1fr; }
+}
+
+/* A checkbox carries its label beside the box, so its field is a control with
+ * no label row. The spacer holds that row open (fb_field_wrapper()) and the
+ * box gets the same 42px shell as every other control, so a flag sits level
+ * with the fields either side instead of 23px above them. */
+.fb-field--flag .fb-field-label--spacer {
+  visibility: hidden;
+}
+.fb-field--flag .checkbox {
+  margin: 0;
+}
+.fb-field--flag .checkbox label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  background-color: var(--blockr-color-bg-input, #f9fafb);
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  /* --blockr-radius-lg */
+  border-radius: 8px;
+  cursor: pointer;
+}
+.fb-field--flag .checkbox input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
 }
 
 /* --- Auto-generated parameter fields ---------------------------------------
@@ -205,16 +261,16 @@
   width: 100%;
 }
 
-/* Field label — 13px / medium / secondary, consistent across select and
- * text/number/checkbox fields. */
+/* Field label, as blockr.ui's .blockr-label: 12px, regular, muted, 4px
+ * above the control, the same for select and text/number/checkbox fields. */
 .function-block-params .fb-field-label,
 .function-block-params .block-input-wrapper label.control-label,
 .function-block-params .block-input-wrapper .shiny-input-container > label {
   display: block;
-  font-weight: 500;
-  font-size: var(--blockr-font-size-sm, 0.8125rem);
-  color: var(--blockr-color-text-secondary, #6b7280);
-  margin-bottom: 5px;
+  font-weight: var(--blockr-font-weight-normal);
+  font-size: var(--blockr-font-size-xs);
+  color: var(--blockr-color-text-muted);
+  margin-bottom: 4px;
 }
 
 /* Text / number inputs → the shared bordered 42px control.
@@ -226,9 +282,9 @@
   height: 42px;
   padding: 8px 12px;
   font-size: var(--blockr-font-size-base, 0.875rem);
-  color: var(--blockr-color-text-primary, #111827);
-  background-color: var(--blockr-color-bg-input, #f9fafb);
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  color: var(--blockr-color-text-default);
+  background-color: var(--blockr-color-bg-field);
+  border: 1px solid var(--blockr-color-border-default);
   border-radius: 8px;
   box-shadow: none;
   box-sizing: border-box;
@@ -236,9 +292,9 @@
 }
 .function-block-params .block-input-wrapper .form-control:focus {
   outline: none;
-  background-color: #ffffff;
-  border-color: var(--blockr-color-primary, #2563eb);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background-color: var(--blockr-color-bg-surface);
+  border-color: var(--blockr-color-border-accent);
+  box-shadow: var(--blockr-focus-ring);
 }
 .function-block-params .block-input-wrapper .form-control::placeholder {
   color: var(--blockr-grey-400, #9ca3af);
@@ -248,43 +304,95 @@
 .function-block-params .block-input-wrapper .checkbox label,
 .function-block-params .block-input-wrapper .shiny-input-container .checkbox label {
   font-weight: 400;
-  font-size: var(--blockr-font-size-base, 0.875rem);
-  color: var(--blockr-color-text-primary, #111827);
+  font-size: var(--blockr-font-size-base);
+  color: var(--blockr-color-text-default);
   margin-bottom: 0;
 }
 
-/* --- Gear-toggled inline editor section (authoring surface) ---
- * The standard gear button (mirrors blockr.dplyr's `.blockr-gear-btn`) toggles
- * an in-flow section that pushes the content below it down. */
-.blockr-gear-editor { width: 100%; }
-.blockr-gear-header {
-  display: flex; align-items: center; justify-content: flex-end;
-  margin-bottom: 6px;
+/* CodeMirror's search bar (Mod-f in the editor), on the design system's
+ * controls: 26px fields and secondary buttons, 12px labels. Three classes deep
+ * to beat CodeMirror's injected theme. The match colours stay CodeMirror's. */
+.blockr-code .cm-panels.cm-panels-top {
+  background: var(--blockr-color-bg-subtle, #f9fafb);
+  border-bottom: 1px solid var(--blockr-color-border, #e5e7eb);
+  color: var(--blockr-color-text-default, #111827);
 }
-.blockr-gear-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; flex-shrink: 0;
-  color: var(--blockr-grey-400, #9ca3af);
-  background: transparent;
+.blockr-code .cm-panel.cm-search {
+  padding: 8px 10px;
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+}
+.blockr-code .cm-panel.cm-search .cm-textfield {
+  height: 26px;
+  margin: 2px 4px 2px 0;
+  padding: 0 8px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 12.5px;
+  background: var(--blockr-color-bg-surface, #fff);
   border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 4px; cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  border-radius: var(--blockr-radius-sm, 4px);
+  vertical-align: middle;
 }
-.blockr-gear-btn:hover {
-  color: var(--blockr-color-primary, #2563eb);
-  border-color: rgba(37, 99, 235, 0.3);
-  background: rgba(37, 99, 235, 0.04);
+.blockr-code .cm-panel.cm-search .cm-textfield:focus {
+  outline: none;
+  border-color: var(--blockr-color-border-accent, #2563eb);
 }
-.blockr-gear-btn.blockr-gear-active {
-  color: var(--blockr-color-primary, #2563eb);
-  border-color: rgba(37, 99, 235, 0.3);
-  background: rgba(37, 99, 235, 0.08);
+.blockr-code .cm-panel.cm-search .cm-button {
+  height: 26px;
+  margin: 2px 4px 2px 0;
+  padding: 0 10px;
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-color-text-default, #111827);
+  background: var(--blockr-color-bg-surface, #fff);
+  background-image: none;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: var(--blockr-radius-sm, 4px);
+  vertical-align: middle;
 }
-.blockr-gear-section { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
-/* In the gear panel there's more room, so allow a taller floor; both share
+.blockr-code .cm-panel.cm-search .cm-button:hover {
+  background: var(--blockr-color-bg-hover, #f3f4f6);
+}
+.blockr-code .cm-panel.cm-search label {
+  margin-right: 10px;
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-color-text-muted, #6b7280);
+  vertical-align: middle;
+}
+.blockr-code .cm-panel.cm-search input[type="checkbox"] {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+.blockr-code .cm-panel.cm-search button[name="close"] {
+  top: 6px;
+  right: 8px;
+  font-size: 16px;
+  color: var(--blockr-color-text-muted, #6b7280);
+}
+
+/* --- The editor behind the gear (gear_editor_ui()) ---
+ * The gear button and the tray (.blockr-settings) are blockr.ui's. The
+ * editor is a field in the tray, so it sits on the surface colour. */
+.blockr-gear-editor { width: 100%; }
+.blockr-gear-section .blockr-code-frame {
+  background: var(--blockr-color-bg-surface, #fff);
+}
+.blockr-gear-section .blockr-code-block:last-child { margin-bottom: 0; }
+/* In the tray there's more room, so allow a taller floor; both share
  * the same ~25-row cap (25 * 20.625px line + 12px content padding) before the
  * editor starts scrolling internally. */
 .blockr-gear-section .blockr-code .cm-editor { min-height: 180px; max-height: 528px; }
+
+/* Beside the output (gear-editor.js): on a wide block the open tray's branch
+ * takes the right column and the output stacks in the left one. What comes
+ * before the branch (a header row) keeps the full width. */
+.blockr-gear-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 42%);
+  column-gap: 16px;
+  align-items: start;
+}
+.blockr-gear-side > * { grid-column: 1 / -1; min-width: 0; }
+.blockr-gear-side > .blockr-gear-side__main { grid-column: 1; }
+.blockr-gear-side > .blockr-gear-side__tray { grid-column: 2; }
 
 /* ---- code block: input lines -------------------------------------------
  * A top-level assignment of a plain value becomes a control on the card. The
