@@ -26,6 +26,7 @@ import { Editor, rootCtx, defaultValueCtx, editorViewCtx, serializerCtx } from "
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
+import { history } from "@milkdown/kit/plugin/history";
 import { replaceAll, getMarkdown } from "@milkdown/kit/utils";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import { joinBackward } from "@milkdown/kit/prose/commands";
@@ -105,6 +106,7 @@ class ProseBlock {
       .use(commonmark)
       .use(gfm)
       .use(listener)
+      .use(history)
       .use(inlineRRemark)
       .use(inlineRNode)
       .use(inlineRPlugin((view, pos, isNew) => self._openField(view, pos, isNew)))
@@ -714,7 +716,10 @@ class ProseBlock {
 // ---- init & message handlers --------------------------------------------------
 
 function initEl(el) {
-  if (!el || !el.id || instances.has(el.id)) return;
+  if (!el || !el.id) return;
+  // a block removed and put back has the same id: the old one is gone
+  const old = instances.get(el.id);
+  if (old && (old.el === el || old.el.isConnected)) return;
   if (!el.classList.contains("blockr-prose") && !el.dataset.inputId) return;
   instances.set(el.id, new ProseBlock(el));
 }
