@@ -258,6 +258,9 @@ async_function_block_css <- function() {
       color: #dc3545; font-size: 0.875rem; padding: 10px;
       background: #f8d7da; border-radius: 4px;
     }
+    .async-status-initial svg, .async-status-error svg {
+      vertical-align: -2px;
+    }
     "
   ))
 }
@@ -339,7 +342,7 @@ block_output.async_function_block <- function(x, result, session) {
     if (status == "initial") {
       shiny::div(
         class = "async-status-initial",
-        shiny::icon("info-circle"),
+        blockr.ui::small_icon("info"),
         " Click 'Run' to execute"
       )
     } else if (status == "running") {
@@ -354,7 +357,7 @@ block_output.async_function_block <- function(x, result, session) {
     } else if (status == "error") {
       shiny::div(
         class = "async-status-error",
-        shiny::icon("exclamation-triangle"),
+        blockr.ui::small_icon("warning"),
         " Error: ", if (is.null(error_msg)) "Unknown error" else error_msg
       )
     } else if (status == "success") {
@@ -366,7 +369,7 @@ block_output.async_function_block <- function(x, result, session) {
       if (is.list(result) && length(result) == 0) {
         shiny::div(
           class = "async-status-initial",
-          shiny::icon("info-circle"),
+          blockr.ui::small_icon("info"),
           " No result returned"
         )
       } else {
