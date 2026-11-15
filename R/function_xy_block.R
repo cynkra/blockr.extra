@@ -1,10 +1,10 @@
 #' Function XY Transform Block
 #'
 #' @description
-#' **Deprecated.** Use [new_function_var_block()] with two inputs instead. This
-#' block is no longer in the registered block vocabulary (dropped from
-#' `register_extra_blocks()`); it stays callable on the shared editor only for
-#' back-compatibility with existing boards.
+#' **Deprecated.** Use `blockr.script::new_script_block()` with two inputs
+#' instead. This block is no longer in the registered block vocabulary
+#' (dropped from `register_extra_blocks()`); it stays callable only so that
+#' existing boards keep working, and says so above its result.
 #'
 #' A block that wraps a user-defined R function with two data inputs (x and y)
 #' and automatically generates UI based on the function's argument defaults.
@@ -151,7 +151,11 @@ block_eval.function_xy_block <- function(x, expr, env, ...) {
 
 #' @export
 block_ui.function_xy_block <- function(id, x, ...) {
-  shiny::uiOutput(shiny::NS(id, "result"))
+  warn_extra_deprecated("new_function_xy_block")
+  shiny::tagList(
+    extra_deprecation_notice(),
+    shiny::uiOutput(shiny::NS(id, "result"))
+  )
 }
 
 #' @export

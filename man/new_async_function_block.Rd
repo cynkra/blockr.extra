@@ -17,6 +17,10 @@ other arguments determine the UI widgets.}
 \item{...}{Additional arguments passed to new_block}
 }
 \description{
+Deprecated: use \code{blockr.script::new_script_block()} instead. This block stays
+so that saved boards keep working, and says so above its result.
+}
+\details{
 A block that wraps a user-defined R function and executes it asynchronously
 using mirai + ExtendedTask. Unlike \code{new_function_block()}, this block requires
 manual execution via a "Run" button and supports cancellation.

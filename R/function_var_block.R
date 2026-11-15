@@ -1,5 +1,8 @@
 #' Function Variadic Transform Block
 #'
+#' Deprecated: use `blockr.script::new_script_block()` instead. This block stays
+#' so that saved boards keep working, and says so above its result.
+#'
 #' A block that wraps a user-defined R function with variadic data inputs (...)
 #' and automatically generates UI based on the function's argument defaults.
 #' Similar to [new_function_block()] but accepts any number of data frames.
@@ -206,7 +209,11 @@ block_eval.function_var_block <- function(x, expr, env, ...) {
 
 #' @export
 block_ui.function_var_block <- function(id, x, ...) {
-  shiny::uiOutput(shiny::NS(id, "result"))
+  warn_extra_deprecated("new_function_var_block")
+  shiny::tagList(
+    extra_deprecation_notice(),
+    shiny::uiOutput(shiny::NS(id, "result"))
+  )
 }
 
 #' @export

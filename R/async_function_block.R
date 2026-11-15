@@ -1,5 +1,8 @@
 #' Async Function Block
 #'
+#' Deprecated: use `blockr.script::new_script_block()` instead. This block stays
+#' so that saved boards keep working, and says so above its result.
+#'
 #' A block that wraps a user-defined R function and executes it asynchronously
 #' using mirai + ExtendedTask. Unlike `new_function_block()`, this block requires
 #' manual execution via a "Run" button and supports cancellation.
@@ -321,7 +324,11 @@ block_eval.async_function_block <- function(x, expr, env, ...) {
 
 #' @export
 block_ui.async_function_block <- function(id, x, ...) {
-  shiny::uiOutput(shiny::NS(id, "result"))
+  warn_extra_deprecated("new_async_function_block")
+  shiny::tagList(
+    extra_deprecation_notice(),
+    shiny::uiOutput(shiny::NS(id, "result"))
+  )
 }
 
 #' @export

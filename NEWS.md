@@ -1,5 +1,15 @@
 # blockr.extra (development version)
 
+## Deprecated
+
+- **The code block and the function blocks are deprecated.** Use the Script
+  block, `blockr.script::new_script_block()`, instead. `new_code_block()`,
+  `new_function_block()`, `new_function_var_block()`, `new_function_xy_block()`
+  and `new_async_function_block()` stay so that saved boards keep working.
+  Each shows a line above its result saying it is deprecated, writes a warning
+  to the R log once per session, and is listed as "(deprecated)" in the block
+  registry, where the assistant is told to add the Script block instead.
+
 ## Features
 
 - **The generated params band drops a column instead of squeezing a select.**

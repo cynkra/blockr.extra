@@ -14,6 +14,10 @@ of other arguments determine the UI widgets.}
 \item{...}{Additional arguments passed to new_block}
 }
 \description{
+Deprecated: use \code{blockr.script::new_script_block()} instead. This block stays
+so that saved boards keep working, and says so above its result.
+}
+\details{
 A block that wraps a user-defined R function with variadic data inputs (...)
 and automatically generates UI based on the function's argument defaults.
 Similar to \code{\link[=new_function_block]{new_function_block()}} but accepts any number of data frames.

@@ -1,5 +1,8 @@
 #' Code Block
 #'
+#' Deprecated: use `blockr.script::new_script_block()` instead. This block stays
+#' so that saved boards keep working, and says so above its result.
+#'
 #' A block whose state is an ordinary R script. The script transforms `data`
 #' (the reserved name for the incoming data frame) into whatever the last
 #' statement returns.
@@ -410,7 +413,11 @@ block_eval.code_block <- function(x, expr, env, ...) {
 
 #' @export
 block_ui.code_block <- function(id, x, ...) {
-  shiny::uiOutput(shiny::NS(id, "result"))
+  warn_extra_deprecated("new_code_block")
+  shiny::tagList(
+    extra_deprecation_notice(),
+    shiny::uiOutput(shiny::NS(id, "result"))
+  )
 }
 
 #' @export

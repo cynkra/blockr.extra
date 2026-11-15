@@ -18,20 +18,20 @@ register_extra_blocks <- function() {
       "new_prose_block"
     ),
     name = c(
-      "Function block",
-      "Code block",
-      "Function Var block",
-      "Async Function block",
+      "Function block (deprecated)",
+      "Code block (deprecated)",
+      "Function Var block (deprecated)",
+      "Async Function block (deprecated)",
       "Broom Summary",
       "Search",
       "Labeler",
       "Prose"
     ),
     description = c(
-      "Transform data with a custom R function in a CodeMirror editor (syntax highlighting, autocomplete, inline AI diff). UI auto-generated from function arguments.",
-      "Transform data with a plain R script (no wrapper function). Top-level assignments of plain values become controls: a factor renders a dropdown over its levels, a number a spin box, TRUE/FALSE a checkbox. A name starting with a dot stays private. Exports as idiomatic R with the current values written in.",
-      "Transform multiple data frames (...) with a custom R function. UI auto-generated from function arguments.",
-      "Transform data with a custom R function asynchronously. Requires mirai daemons. Click Run to execute.",
+      "Deprecated, kept for saved boards: use the Script block (blockr.script). Transform data with a custom R function in a CodeMirror editor (syntax highlighting, autocomplete, inline AI diff). UI auto-generated from function arguments.",
+      "Deprecated, kept for saved boards: use the Script block (blockr.script). Transform data with a plain R script (no wrapper function). Top-level assignments of plain values become controls: a factor renders a dropdown over its levels, a number a spin box, TRUE/FALSE a checkbox. A name starting with a dot stays private. Exports as idiomatic R with the current values written in.",
+      "Deprecated, kept for saved boards: use the Script block (blockr.script). Transform multiple data frames (...) with a custom R function. UI auto-generated from function arguments.",
+      "Deprecated, kept for saved boards: use the Script block (blockr.script). Transform data with a custom R function asynchronously. Requires mirai daemons. Click Run to execute.",
       "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
       "Filter rows by case-insensitive substring match across all columns.",
       "Add or edit column labels (the `attr(col, \"label\")` attribute shown in column pickers and table headers). Empty label removes it.",
@@ -60,7 +60,7 @@ register_extra_blocks <- function() {
     guidance = c(
       # new_function_block:
       # Authored once in inst/prompts/function-block.md; see function_block_prompt().
-      tryCatch(
+      paste0(extra_deprecation_guidance, tryCatch(
         function_block_prompt(),
         error = function(e) paste(
           "Write `fn` as `function(data, ...)`; every extra argument needs a",
@@ -69,9 +69,10 @@ register_extra_blocks <- function() {
           "pipe |>; namespace-prefix calls (dplyr::filter()) and use",
           ".data[[col]] for string-valued column parameters."
         )
-      ),
+      )),
       # new_code_block:
       paste(
+        extra_deprecation_guidance,
         "Write `script` as an ordinary R script that transforms `data` (the",
         "reserved name for the incoming data frame) and ends with the result.",
         "Do NOT wrap it in a function and do NOT call one.",
@@ -96,12 +97,13 @@ register_extra_blocks <- function() {
       ),
       # new_function_var_block:
       paste(
+        extra_deprecation_guidance,
         "Write a complete R function as a string. The function receives '...' (any number of data frames) as its first argument.",
         "\n\nR coding rules: always use the base pipe |> (never %>%).",
         "Namespace-prefix all functions except base and stats (e.g. dplyr::bind_rows(), stringr::str_detect())."
       ),
       # new_async_function_block:
-      "",
+      extra_deprecation_guidance,
       # new_broom_summary_block:
       "",
       # new_search_block:

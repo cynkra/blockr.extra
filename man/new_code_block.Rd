@@ -21,6 +21,10 @@ board. Values for names the script no longer declares are dropped.}
 \item{...}{Additional arguments passed to \code{\link[blockr.core:new_block]{blockr.core::new_block()}}}
 }
 \description{
+Deprecated: use \code{blockr.script::new_script_block()} instead. This block stays
+so that saved boards keep working, and says so above its result.
+}
+\details{
 A block whose state is an ordinary R script. The script transforms \code{data}
 (the reserved name for the incoming data frame) into whatever the last
 statement returns.
