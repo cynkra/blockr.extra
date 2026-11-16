@@ -23,8 +23,9 @@ extra_replacements <- c(
 
 extra_deprecation_text <- function(ctor) {
   paste0(
-    "Deprecated: use ", extra_replacements[[ctor]], ". ",
-    "This block stays so that saved boards keep working."
+    "blockr.extra is retired and should no longer be used. ",
+    "In place of this block, use ", extra_replacements[[ctor]], ". ",
+    "It stays only so that saved boards keep working."
   )
 }
 
