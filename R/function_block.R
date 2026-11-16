@@ -126,7 +126,7 @@ block_eval.function_block <- function(x, expr, env, ...) {
 block_ui.function_block <- function(id, x, ...) {
   warn_extra_deprecated("new_function_block")
   shiny::tagList(
-    extra_deprecation_notice(),
+    extra_deprecation_notice("new_function_block"),
     shiny::uiOutput(shiny::NS(id, "result"))
   )
 }

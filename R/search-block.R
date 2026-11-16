@@ -133,3 +133,8 @@ make_search_expr <- function(string) {
 escape_regex <- function(x) {
   gsub("([][{}().^$*+?|\\\\])", "\\\\\\1", x)
 }
+
+#' @export
+block_ui.search_block <- function(id, x, ...) {
+  extra_deprecated_ui("new_search_block", NextMethod())
+}

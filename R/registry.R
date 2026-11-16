@@ -22,20 +22,20 @@ register_extra_blocks <- function() {
       "Code block (deprecated)",
       "Function Var block (deprecated)",
       "Async Function block (deprecated)",
-      "Broom Summary",
-      "Search",
-      "Labeler",
-      "Prose"
+      "Broom Summary (deprecated)",
+      "Search (deprecated)",
+      "Labeler (deprecated)",
+      "Prose (deprecated)"
     ),
     description = c(
       "Deprecated, kept for saved boards: use the Script block (blockr.script). Transform data with a custom R function in a CodeMirror editor (syntax highlighting, autocomplete, inline AI diff). UI auto-generated from function arguments.",
       "Deprecated, kept for saved boards: use the Script block (blockr.script). Transform data with a plain R script (no wrapper function). Top-level assignments of plain values become controls: a factor renders a dropdown over its levels, a number a spin box, TRUE/FALSE a checkbox. A name starting with a dot stays private. Exports as idiomatic R with the current values written in.",
       "Deprecated, kept for saved boards: use the Script block (blockr.script). Transform multiple data frames (...) with a custom R function. UI auto-generated from function arguments.",
       "Deprecated, kept for saved boards: use the Script block (blockr.script). Transform data with a custom R function asynchronously. Requires mirai daemons. Click Run to execute.",
-      "Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
-      "Filter rows by case-insensitive substring match across all columns.",
-      "Add or edit column labels (the `attr(col, \"label\")` attribute shown in column pickers and table headers). Empty label removes it.",
-      "Text that can compute: markdown edited as it reads, with inline R as `r expr` (Quarto's form). Values show in the text, marked with a dotted underline."
+      "Deprecated, kept for saved boards: use the Broom block (blockr.stats). Model summary using broom (tidy/glance/augment). Works with any broom-compatible model.",
+      "Deprecated, kept for saved boards: use the Table block (blockr.viz), which has a search box. Filter rows by case-insensitive substring match across all columns.",
+      "Deprecated, kept for saved boards: use the Script block (blockr.script). Add or edit column labels (the `attr(col, \"label\")` attribute shown in column pickers and table headers). Empty label removes it.",
+      "Deprecated, kept for saved boards: use the Prose block (blockr.script). Text that can compute: markdown edited as it reads, with inline R as `r expr` (Quarto's form). Values show in the text, marked with a dotted underline."
     ),
     category = c(
       "transform",
@@ -60,7 +60,7 @@ register_extra_blocks <- function() {
     guidance = c(
       # new_function_block:
       # Authored once in inst/prompts/function-block.md; see function_block_prompt().
-      paste0(extra_deprecation_guidance, tryCatch(
+      paste0(extra_deprecation_guidance("new_function_block"), tryCatch(
         function_block_prompt(),
         error = function(e) paste(
           "Write `fn` as `function(data, ...)`; every extra argument needs a",
@@ -72,7 +72,7 @@ register_extra_blocks <- function() {
       )),
       # new_code_block:
       paste(
-        extra_deprecation_guidance,
+        extra_deprecation_guidance("new_code_block"),
         "Write `script` as an ordinary R script that transforms `data` (the",
         "reserved name for the incoming data frame) and ends with the result.",
         "Do NOT wrap it in a function and do NOT call one.",
@@ -97,25 +97,27 @@ register_extra_blocks <- function() {
       ),
       # new_function_var_block:
       paste(
-        extra_deprecation_guidance,
+        extra_deprecation_guidance("new_function_var_block"),
         "Write a complete R function as a string. The function receives '...' (any number of data frames) as its first argument.",
         "\n\nR coding rules: always use the base pipe |> (never %>%).",
         "Namespace-prefix all functions except base and stats (e.g. dplyr::bind_rows(), stringr::str_detect())."
       ),
       # new_async_function_block:
-      extra_deprecation_guidance,
+      extra_deprecation_guidance("new_async_function_block"),
       # new_broom_summary_block:
-      "",
+      extra_deprecation_guidance("new_broom_summary_block"),
       # new_search_block:
-      "",
+      extra_deprecation_guidance("new_search_block"),
       # new_labeler_block:
       paste(
+        extra_deprecation_guidance("new_labeler_block"),
         "Set `labels` to a named list mapping existing column names to",
         "human-readable label strings. Use an empty string to remove a",
         "column's label. Columns not present in the data are ignored."
       ),
       # new_prose_block:
       paste(
+        extra_deprecation_guidance("new_prose_block"),
         "Write `text` as GFM markdown. Compute values with inline R the way",
         "Quarto writes it: `r nrow(data)`, `r round(mean(data$mpg), 1)`.",
         "Each input is bound by its INPUT NAME (usually `data`); a bare",

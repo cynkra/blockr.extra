@@ -2,13 +2,18 @@
 
 ## Deprecated
 
-- **The code block and the function blocks are deprecated.** Use the Script
-  block, `blockr.script::new_script_block()`, instead. `new_code_block()`,
-  `new_function_block()`, `new_function_var_block()`, `new_function_xy_block()`
-  and `new_async_function_block()` stay so that saved boards keep working.
-  Each shows a line above its result saying it is deprecated, writes a warning
-  to the R log once per session, and is listed as "(deprecated)" in the block
-  registry, where the assistant is told to add the Script block instead.
+- **Every block in blockr.extra is deprecated**, as the package is being
+  retired. The code block and the function blocks (`new_code_block()`,
+  `new_function_block()`, `new_function_var_block()`,
+  `new_function_xy_block()`, `new_async_function_block()`) and the labeler
+  block give way to the Script block in blockr.script, the prose block to
+  blockr.script's Prose block, the broom summary block to the Broom block in
+  blockr.stats, and the search block to blockr.viz's Table block, which has a
+  search box. The blocks stay so that saved boards keep working. Each shows a
+  line above its result saying what replaces it, writes a warning to the R log
+  once per session, and is listed as "(deprecated)" in the block registry,
+  where the assistant is told to add the replacement instead. The compare
+  block moves to blockr.insurance.
 
 ## Features
 

@@ -461,7 +461,7 @@ broom_html_summary <- function(model, tidy_df, glance_df, augment_df) {
 
 #' @export
 block_ui.broom_summary_block <- function(id, x, ...) {
-  uiOutput(NS(id, "result"))
+  extra_deprecated_ui("new_broom_summary_block", uiOutput(NS(id, "result")))
 }
 
 #' @export

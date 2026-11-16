@@ -415,7 +415,7 @@ block_eval.code_block <- function(x, expr, env, ...) {
 block_ui.code_block <- function(id, x, ...) {
   warn_extra_deprecated("new_code_block")
   shiny::tagList(
-    extra_deprecation_notice(),
+    extra_deprecation_notice("new_code_block"),
     shiny::uiOutput(shiny::NS(id, "result"))
   )
 }

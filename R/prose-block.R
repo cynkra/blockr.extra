@@ -284,3 +284,8 @@ prose_block_dep <- function() {
     )
   )
 }
+
+#' @export
+block_ui.prose_block <- function(id, x, ...) {
+  extra_deprecated_ui("new_prose_block", NextMethod())
+}

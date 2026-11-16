@@ -238,3 +238,8 @@ labeler_block_dep <- memoise0(function() {
     )
   )
 })
+
+#' @export
+block_ui.labeler_block <- function(id, x, ...) {
+  extra_deprecated_ui("new_labeler_block", NextMethod())
+}
